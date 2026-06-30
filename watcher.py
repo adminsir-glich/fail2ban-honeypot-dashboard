@@ -179,7 +179,7 @@ class AuthLogTailer:
                 "eventid": "cowrie.login.failed",
                 "src_ip": ip,
                 "username": user,
-                "password": "********",
+                "password": "[not logged]",
                 "timestamp": timestamp,
                 "session": f"real-ssh-{pid}",
                 "is_real_ssh": True
@@ -193,7 +193,7 @@ class AuthLogTailer:
                 "eventid": "cowrie.login.failed",
                 "src_ip": ip,
                 "username": user,
-                "password": "********",
+                "password": "[not logged]",
                 "timestamp": timestamp,
                 "session": f"real-ssh-{pid}",
                 "is_real_ssh": True

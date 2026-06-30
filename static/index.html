@@ -1173,7 +1173,7 @@ async function loadRecentAttacks() {
         city: { name: 'Unknown' },
         username: ev.username,
         password: ev.password || '[empty]',
-        type: ev.is_real_ssh ? 'REAL SSH' : 'SSH',
+        type: 'SSH',
         port: ev.is_real_ssh ? 2222 : 22,
         severity: isSuccess ? 'SUCCESS' : (ev.username === 'root' || ev.username === 'admin') ? 'HIGH' : 'MEDIUM',
         isSuccess: isSuccess
@@ -1522,7 +1522,7 @@ function subscribeSSE() {
           city: { name: ev.city || 'Unknown' },
           username: ev.username || '',
           password: ev.password || '[empty]',
-          type: ev.is_real_ssh ? 'REAL SSH' : 'SSH',
+          type: 'SSH',
           port: ev.is_real_ssh ? 2222 : 22,
           severity: severity,
           color: color,
