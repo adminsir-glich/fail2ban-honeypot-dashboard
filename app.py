@@ -204,7 +204,25 @@ def _read_fail2ban_bans() -> list[dict]:
         m = ban_re.search(line)
         if m:
             jail, ip = m.group(1), m.group(2)
-            last_ban[(jail, ip)] = {"jail": jail, "ip": ip, "banned_at": line.split(",")[0]}
+            ts_str = line.split(",")[0].strip()
+            # calculate banned_until
+            try:
+                from datetime import datetime, timezone
+                dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                bantime = 3600
+                if jail == "cowrie":
+                    bantime = 86400
+                elif jail == "recidive":
+                    bantime = 604800
+                banned_until = dt.replace(tzinfo=timezone.utc).timestamp() + bantime
+            except Exception:
+                banned_until = 0.0
+            last_ban[(jail, ip)] = {
+                "jail": jail,
+                "ip": ip,
+                "banned_at": ts_str,
+                "banned_until": banned_until
+            }
         m = unban_re.search(line)
         if m:
             last_ban.pop((m.group(1), m.group(2)), None)
@@ -391,6 +409,18 @@ async def countries_top(limit: int = Query(20, le=100)):
                 c[(geo["country_code"], geo["country"])] += 1
     return [{"country_code": cc, "country": name, "count": n}
             for (cc, name), n in c.most_common(limit)]
+
+
+@app.get("/api/asns/top")
+async def asns_top(limit: int = Query(8, le=100)):
+    c: Counter = Counter()
+    for ev in state["events"]:
+        if ev.get("eventid") in ("cowrie.login.failed", "cowrie.login.success"):
+            ip = ev.get("src_ip")
+            geo = state["geo_cache"].get(ip) if ip else None
+            if geo and geo.get("asn"):
+                c[(geo["asn"], geo.get("org", "Unknown"))] += 1
+    return [{"asn": asn, "org": org, "count": n} for (asn, org), n in c.most_common(limit)]
 
 
 @app.get("/api/timeseries")

@@ -559,6 +559,15 @@
     <div class="p-3 space-y-2.5" id="topPasswords"></div>
   </div>
   
+  <!-- Top Attack ASNs -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Top Attack Networks (ASNs)</span>
+      <span class="panel-id">[05.N]</span>
+    </div>
+    <div class="p-3 space-y-2.5" id="topASNs"></div>
+  </div>
+  
   <!-- Timeline -->
   <div class="panel">
     <div class="panel-header">
@@ -615,7 +624,7 @@
       </div>
       <span class="panel-id">[07.S]</span>
     </div>
-    <div class="grid grid-cols-[300px_1fr] h-[400px] border-t border-[var(--border)] overflow-hidden">
+    <div class="grid grid-cols-[240px_1fr_240px] h-[400px] border-t border-[var(--border)] overflow-hidden">
       <!-- Session list -->
       <div id="sessionAnalyzerList" class="overflow-y-auto border-r border-[var(--border)] p-2 space-y-2 select-none" style="background: rgba(4, 8, 16, 0.4);">
         <div class="text-[10px] text-[var(--text-dim)] mono p-2">SELECT A SESSION TO REPLAY...</div>
@@ -627,6 +636,13 @@
           <button id="sessionTermPlaySpeed" class="text-[9px] text-[var(--accent-2)] border border-[var(--accent-2)] px-2 py-0.5 rounded hover:bg-[var(--accent-2)] hover:text-black transition-colors mono">SPEED: 1x</button>
         </div>
         <div id="sessionTerminal" class="flex-1 p-3 overflow-y-auto text-xs mono text-[var(--success)] whitespace-pre-wrap leading-relaxed select-text"></div>
+      </div>
+      <!-- Captured commands list -->
+      <div id="sessionCommandsPanel" class="overflow-y-auto border-l border-[var(--border)] p-2 flex flex-col gap-1 select-none" style="background: rgba(4, 8, 16, 0.4);">
+        <div class="text-[10px] text-[var(--text-dim)] mono p-1 border-b border-[var(--border)] mb-1">COMMAND HISTORY</div>
+        <div id="sessionCommandsList" class="flex-1 space-y-1.5 overflow-y-auto pr-1">
+          <div class="text-[9px] text-[var(--text-muted)] mono italic p-1">No session selected.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -654,6 +670,7 @@ const state = {
   passwords: {},
   countryAttacks: {},
   bannedIPs: [],
+  activeBans: [],
   feed: [],
   timeline: new Array(60).fill(0),
   paused: false,
@@ -846,6 +863,12 @@ const sessionMetadata = {}; // sessionId -> {id, ip, countryCode, time}
 let playbackInterval = null;
 let currentSpeed = 1; // Playback speed: 1x, 2x, 5x
 
+// Live session playback states
+let activePlaybackSessionId = null;
+let activePlaybackEvents = [];
+let activePlaybackStep = 0;
+let activePlaybackIsLive = false;
+
 function formatNumber(num) {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
@@ -963,13 +986,14 @@ async function loadSummary() {
   }
 }
 
-// Load top usernames, passwords, and countries
+// Load top usernames, passwords, countries, and ASNs
 async function loadTopLists() {
   try {
-    const [unRes, pwRes, ctRes] = await Promise.all([
+    const [unRes, pwRes, ctRes, asnRes] = await Promise.all([
       fetch('/fail2ban/api/usernames/top?limit=8').then(r => r.json()),
       fetch('/fail2ban/api/passwords/top?limit=8').then(r => r.json()),
-      fetch('/fail2ban/api/countries/top?limit=12').then(r => r.json())
+      fetch('/fail2ban/api/countries/top?limit=12').then(r => r.json()),
+      fetch('/fail2ban/api/asns/top?limit=8').then(r => r.json())
     ]);
     
     // Update Usernames list
@@ -1007,6 +1031,26 @@ async function loadTopLists() {
           </div>
           <div class="bar-bg">
             <div class="bar-fill" style="width: ${pct}%; background: var(--critical); box-shadow: 0 0 8px rgba(255,46,99,0.5);"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Update ASNs list
+    const maxAsn = asnRes[0] ? asnRes[0].count : 1;
+    document.getElementById('topASNs').innerHTML = asnRes.map((x, i) => {
+      const pct = (x.count / maxAsn) * 100;
+      return `
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-[10px] mono text-[var(--text-dim)]">${String(i + 1).padStart(2, '0')}</span>
+              <span class="text-xs mono font-semibold text-[var(--accent-2)] truncate" title="${escapeHtml(x.org)}">${escapeHtml(x.asn)} <span class="text-[10px] text-[var(--text-muted)]">(${escapeHtml(x.org)})</span></span>
+            </div>
+            <span class="text-xs mono text-[var(--text-muted)]">${formatNumber(x.count)}</span>
+          </div>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width: ${pct}%; background: var(--accent-2); box-shadow: 0 0 8px rgba(0,240,255,0.5);"></div>
           </div>
         </div>
       `;
@@ -1095,9 +1139,11 @@ async function loadBans() {
     const r = await fetch('/fail2ban/api/bans/active');
     const data = await r.json();
     state.bans = data.length;
+    state.activeBans = data;
     
     const html = data.slice(0, 12).map(b => {
       const timeStr = b.banned_at ? b.banned_at.split(' ')[1] || b.banned_at : "00:00:00";
+      const ipSafe = b.ip.replace(/[\.\:]/g, '-');
       return `
         <div class="px-3 py-2 border-b border-[var(--border)] data-row">
           <div class="flex items-center justify-between mb-1">
@@ -1105,7 +1151,7 @@ async function loadBans() {
               <span class="status-dot" style="background: var(--critical); color: var(--critical); width:6px; height:6px;"></span>
               <span class="text-xs mono font-bold text-[var(--text)]">${escapeHtml(b.ip)}</span>
             </div>
-            <span class="text-[9px] mono text-[var(--text-muted)]">ACTIVE BAN</span>
+            <span class="text-[9px] mono text-[var(--text-muted)] font-semibold" id="ban-timer-${ipSafe}">ACTIVE BAN</span>
           </div>
           <div class="flex items-center justify-between text-[10px] mono text-[var(--text-muted)]">
             <div class="flex items-center gap-1.5">
@@ -1120,10 +1166,38 @@ async function loadBans() {
       `;
     }).join('');
     document.getElementById('bannedIPs').innerHTML = html;
+    tickBanTimers();
   } catch (e) {
     console.error("Failed to load bans", e);
   }
 }
+
+function tickBanTimers() {
+  if (!state.activeBans) return;
+  state.activeBans.forEach(b => {
+    const ipSafe = b.ip.replace(/[\.\:]/g, '-');
+    const el = document.getElementById(`ban-timer-${ipSafe}`);
+    if (!el) return;
+    const remaining = Math.max(0, Math.floor(b.banned_until - Date.now() / 1000));
+    if (remaining <= 0) {
+      el.textContent = "UNBANNING...";
+      el.style.color = "var(--success)";
+    } else {
+      const h = Math.floor(remaining / 3600);
+      const m = Math.floor((remaining % 3600) / 60);
+      const s = remaining % 60;
+      let timeStr = "";
+      if (h > 0) timeStr += `${h}h `;
+      if (m > 0 || h > 0) timeStr += `${m}m `;
+      timeStr += `${s}s`;
+      el.textContent = `${timeStr}`;
+      el.style.color = "var(--warning)";
+    }
+  });
+}
+
+// Tick timers every second
+setInterval(tickBanTimers, 1000);
 
 // Load timeline chart data
 async function loadTimeseries() {
@@ -1156,7 +1230,7 @@ async function loadRecentAttacks() {
     // Populate feed and session metadata
     state.feed = data.map(ev => {
       const sId = ev.session || 'unknown';
-      if (sId !== 'unknown' && !sessionMetadata[sId]) {
+      if (sId !== 'unknown' && !sId.startsWith('real-ssh') && !sessionMetadata[sId]) {
         sessionMetadata[sId] = {
           id: sId,
           ip: ev.ip,
@@ -1265,7 +1339,7 @@ function updateFeed() {
   document.getElementById('liveFeed').innerHTML = html;
 }
 
-// Update the active sessions list panel
+// Update the active sessions list panel (grouped by IP to save space)
 function updateSessionList(sessionsArray) {
   const listEl = document.getElementById('sessionAnalyzerList');
   if (!listEl) return;
@@ -1275,14 +1349,36 @@ function updateSessionList(sessionsArray) {
     return;
   }
   
-  const html = sessionsArray.map(s => {
+  // Group by IP
+  const groups = {};
+  sessionsArray.forEach(s => {
+    if (!groups[s.ip]) {
+      groups[s.ip] = {
+        ip: s.ip,
+        countryCode: s.countryCode,
+        sessions: []
+      };
+    }
+    groups[s.ip].sessions.push(s);
+  });
+  
+  const html = Object.values(groups).map(g => {
+    const sessionLinks = g.sessions.map(s => `
+      <div class="mt-1 flex items-center justify-between px-2 py-1 bg-[#040810]/80 border border-[var(--border)] hover:border-[var(--accent-2)] rounded cursor-pointer transition-colors" id="session-replay-btn-${s.id}">
+        <span class="text-[9px] mono text-[var(--text-dim)]">${escapeHtml(s.time)}</span>
+        <span class="text-[8px] text-[var(--accent-2)] font-bold mono uppercase">REPLAY</span>
+      </div>
+    `).join('');
+    
     return `
-      <div class="p-2 border border-[var(--border)] hover:border-[var(--accent-2)] bg-[#0a0f1c] cursor-pointer rounded transition-all flex justify-between items-center session-item" id="session-item-${s.id}">
-        <div class="mono text-[10px]">
-          <div class="font-bold text-[var(--text)]">${escapeHtml(s.ip)}</div>
-          <div class="text-[var(--text-dim)]">${escapeHtml(s.time)} (${escapeHtml(s.countryCode)})</div>
+      <div class="p-2 border border-[var(--border)] bg-[#0a0f1c]/70 rounded transition-all">
+        <div class="mono text-[10px] flex items-center justify-between border-b border-[var(--border)] pb-1 mb-1.5">
+          <span class="font-bold text-[var(--text)]">${escapeHtml(g.ip)}</span>
+          <span class="text-[9px] text-[var(--text-muted)] font-semibold uppercase">${escapeHtml(g.countryCode)}</span>
         </div>
-        <span class="text-[8px] bg-[var(--accent-2)] text-black px-1.5 py-0.5 rounded font-bold mono">REPLAY</span>
+        <div class="space-y-1">
+          ${sessionLinks}
+        </div>
       </div>
     `;
   }).join('');
@@ -1291,7 +1387,7 @@ function updateSessionList(sessionsArray) {
   
   // Attach event click listeners to elements
   sessionsArray.forEach(s => {
-    const el = document.getElementById(`session-item-${s.id}`);
+    const el = document.getElementById(`session-replay-btn-${s.id}`);
     if (el) {
       el.addEventListener('click', () => {
         replaySession(s.id);
@@ -1300,11 +1396,30 @@ function updateSessionList(sessionsArray) {
   });
 }
 
+function updateCommandsPanel() {
+  const commands = activePlaybackEvents.filter(ev => ev.eventid === 'cowrie.command.input');
+  const cmdListEl = document.getElementById('sessionCommandsList');
+  if (commands.length === 0) {
+    cmdListEl.innerHTML = '<div class="text-[9px] text-[var(--text-muted)] mono italic p-1">No commands executed.</div>';
+  } else {
+    cmdListEl.innerHTML = commands.map(c => {
+      return `
+        <div class="p-1 border border-[var(--border)] bg-[#040810]/40 rounded mono text-[9px] text-[var(--text)] hover:border-[var(--accent-2)] transition-colors select-text cursor-pointer truncate" title="${escapeHtml(c.input)}">
+          <span class="text-[var(--accent)] font-semibold">$</span> ${escapeHtml(c.input)}
+        </div>
+      `;
+    }).join('');
+  }
+}
+
 // Playback terminal session log reconstruction
 async function replaySession(sessionId) {
   if (playbackInterval) clearTimeout(playbackInterval);
   const term = document.getElementById('sessionTerminal');
   const termHeader = document.getElementById('sessionTermHeader');
+  
+  activePlaybackSessionId = sessionId;
+  activePlaybackStep = 0;
   
   termHeader.textContent = `TERMINAL // PLAYBACK SESSION: ${sessionId}`;
   term.innerHTML = `<span class="text-[var(--text-muted)]">[SYSTEM] Fetching session logs from database...</span>\n`;
@@ -1315,21 +1430,37 @@ async function replaySession(sessionId) {
     
     if (events.length === 0) {
       term.innerHTML = `<span class="text-[var(--critical)]">[SYSTEM] Session details not found or logs empty.</span>\n`;
+      document.getElementById('sessionCommandsList').innerHTML = '<div class="text-[9px] text-[var(--text-muted)] mono italic p-1">No session data.</div>';
       return;
     }
     
-    term.innerHTML = `<span class="text-[var(--success)]">[SYSTEM] Session logs reconstructed. Initiating playback at ${currentSpeed}x...</span>\n\n`;
+    activePlaybackEvents = events;
+    const isClosed = events.some(ev => ev.eventid === 'cowrie.session.closed');
+    activePlaybackIsLive = !isClosed;
     
-    let step = 0;
+    // Populate Captured Commands panel
+    updateCommandsPanel();
+    
+    term.innerHTML = `<span class="text-[var(--success)]">[SYSTEM] Session logs reconstructed. Initiating playback at ${currentSpeed}x...</span>\n\n`;
+    if (activePlaybackIsLive) {
+      term.innerHTML += `<span class="text-[var(--warning)]">[SYSTEM] ACTIVE CONNECTION DETECTED. Watching commands in real-time...</span>\n\n`;
+    }
     
     function nextStep() {
-      if (step >= events.length) {
+      if (activePlaybackSessionId !== sessionId) return;
+      
+      if (activePlaybackStep >= activePlaybackEvents.length) {
+        if (activePlaybackIsLive) {
+          // Connection is still open: poll the array for new events injected by SSE stream
+          playbackInterval = setTimeout(nextStep, 500);
+          return;
+        }
         term.innerHTML += `\n<span class="text-[var(--text-muted)]">[SYSTEM] End of session playback.</span>\n`;
         term.scrollTop = term.scrollHeight;
         return;
       }
       
-      const ev = events[step++];
+      const ev = activePlaybackEvents[activePlaybackStep++];
       let text = '';
       
       if (ev.eventid === 'cowrie.session.connect') {
@@ -1365,6 +1496,7 @@ async function replaySession(sessionId) {
         }
       } else if (ev.eventid === 'cowrie.session.closed') {
         text = `\n[DISCONNECT] Host disconnected. Session duration: ${(ev.duration_ms / 1000).toFixed(1)} seconds\n`;
+        activePlaybackIsLive = false;
       }
       
       if (text) {
@@ -1436,8 +1568,12 @@ function addTerminalLine(attack, banned) {
   const terminal = document.getElementById('terminal');
   const time = attack.timestamp;
   
+  const isSuccess = attack.severity === 'SUCCESS' || attack.isSuccess;
+  const statusLabel = isSuccess ? `<span class="text-[var(--success)]">SUCCESS</span>` : `<span class="text-[var(--critical)]">FAIL</span>`;
+  const passColor = isSuccess ? 'var(--success)' : 'var(--critical)';
+  
   const lines = [];
-  lines.push(`<span class="text-[var(--text-dim)]">[${time}]</span> <span class="text-[var(--warning)]">[${attack.type}:${attack.port}]</span> <span class="text-[var(--critical)]">FAIL</span> <span class="text-[var(--text-muted)]">from</span> <span class="text-[var(--text)]">${attack.ip}</span> <span class="text-[var(--accent-2)]">(${attack.country.code})</span> <span class="text-[var(--text-muted)]">user:</span><span class="text-[var(--accent)]">${attack.username}</span> <span class="text-[var(--text-muted)]">pass:</span><span class="text-[var(--critical)]">${attack.password}</span>`);
+  lines.push(`<span class="text-[var(--text-dim)]">[${time}]</span> <span class="text-[var(--warning)]">[${attack.type}:${attack.port}]</span> ${statusLabel} <span class="text-[var(--text-muted)]">from</span> <span class="text-[var(--text)]">${attack.ip}</span> <span class="text-[var(--accent-2)]">(${attack.country.code})</span> <span class="text-[var(--text-muted)]">user:</span><span class="text-[var(--accent)]">${attack.username}</span> <span class="text-[var(--text-muted)]">pass:</span><span class="text-[var(--text)]" style="color: ${passColor};">${attack.password}</span>`);
   
   if (banned) {
     lines.push(`<span class="text-[var(--text-dim)]">[${time}]</span> <span class="text-[var(--accent)]">[BAN]</span> <span class="text-[var(--text)]">${attack.ip}</span> <span class="text-[var(--text-muted)]">-</span> <span class="text-[var(--accent)]">banned for 24h</span> <span class="text-[var(--text-muted)]">(maxretry exceeded · ${attack.severity})</span>`);
@@ -1508,6 +1644,24 @@ function subscribeSSE() {
       const ev = JSON.parse(msg.data);
       if (ev.eventid === 'hello') return;
       
+      // Update active streaming replay if it matches
+      if (activePlaybackSessionId && ev.session === activePlaybackSessionId) {
+        const exists = activePlaybackEvents.some(x => 
+          x.eventid === ev.eventid && 
+          x.timestamp === ev.timestamp && 
+          (ev.eventid !== 'cowrie.command.input' || x.input === ev.input)
+        );
+        if (!exists) {
+          activePlaybackEvents.push(ev);
+          if (ev.eventid === 'cowrie.command.input') {
+            updateCommandsPanel();
+          }
+          if (ev.eventid === 'cowrie.session.closed') {
+            activePlaybackIsLive = false;
+          }
+        }
+      }
+      
       if (ev.eventid === 'cowrie.login.failed' || ev.eventid === 'cowrie.login.success') {
         const isSuccess = ev.eventid === 'cowrie.login.success';
         const severity = isSuccess ? 'SUCCESS' : (ev.username === 'root' || ev.username === 'admin') ? 'HIGH' : 'MEDIUM';
@@ -1546,7 +1700,7 @@ function subscribeSSE() {
         addTerminalLine(attack, false);
         
         const sId = ev.session;
-        if (sId && !sessionMetadata[sId]) {
+        if (sId && !sId.startsWith('real-ssh') && !sessionMetadata[sId]) {
           sessionMetadata[sId] = {
             id: sId,
             ip: ev.src_ip,
