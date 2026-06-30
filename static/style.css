@@ -1,0 +1,27 @@
+/* Minimal styling — replace with your own design */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0a0e1a; color: #e0e6f0; overflow: hidden; }
+header { padding: 12px 20px; background: #0f1626; border-bottom: 1px solid #1f2940; display: flex; align-items: baseline; gap: 16px; }
+header h1 { font-size: 18px; font-weight: 600; }
+header .tag { font-size: 13px; color: #8a9bb5; }
+main { display: flex; height: calc(100vh - 110px); }
+#globe-container { flex: 1; background: #060a14; }
+#sidebar { width: 360px; padding: 16px; overflow-y: auto; background: #0a0e1a; border-left: 1px solid #1f2940; }
+.card { background: #0f1626; border: 1px solid #1f2940; border-radius: 6px; padding: 14px 16px; margin-bottom: 12px; }
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: #8a9bb5; margin-bottom: 10px; font-weight: 600; }
+.stat { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; border-bottom: 1px dashed #1f2940; }
+.stat:last-child { border: none; }
+.stat .label { color: #8a9bb5; }
+.stat span:last-child { font-family: ui-monospace, monospace; color: #4fc3f7; font-weight: 600; }
+ol { list-style: none; }
+ol li { display: flex; justify-content: space-between; padding: 4px 0; font-family: ui-monospace, monospace; font-size: 12px; }
+ol li span:first-child { color: #e0e6f0; }
+ol li span:last-child { color: #4fc3f7; font-weight: 600; }
+#ticker { font-family: ui-monospace, monospace; font-size: 11px; max-height: 220px; overflow-y: auto; }
+#ticker .item { padding: 4px 0; border-bottom: 1px dotted #1f2940; color: #b0bdd0; }
+#ticker .item .ip { color: #ff7676; font-weight: 600; }
+#ticker .item .cred { color: #4fc3f7; }
+footer { padding: 8px 20px; background: #0f1626; border-top: 1px solid #1f2940; font-size: 11px; color: #5a6a85; text-align: center; }
+footer code { background: #060a14; padding: 2px 6px; border-radius: 3px; color: #4fc3f7; }
+footer a { color: #4fc3f7; text-decoration: none; }
+footer a:hover { text-decoration: underline; }

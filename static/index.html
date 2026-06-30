@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINEL // Honeypot Threat Intelligence</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/globe.gl"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  :root {
+    --bg: #060812;
+    --bg-panel: #0a0f1c;
+    --bg-elevated: #111729;
+    --border: #1a2138;
+    --border-bright: #2a3552;
+    --accent: #ff6b35;
+    --accent-2: #00f0ff;
+    --critical: #ff2e63;
+    --warning: #ffb800;
+    --success: #00ff9d;
+    --text: #e8eaf0;
+    --text-muted: #6b7280;
+    --text-dim: #4b5568;
+  }
+  
+  * { box-sizing: border-box; }
+  
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  
+  body {
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(255, 107, 53, 0.08), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 80% 100%, rgba(0, 240, 255, 0.06), transparent 60%),
+      linear-gradient(180deg, #060812 0%, #04060d 100%);
+  }
+  
+  .mono { font-family: 'JetBrains Mono', monospace; letter-spacing: 0.02em; }
+  
+  .panel {
+    background: linear-gradient(180deg, rgba(255,255,255,0.015), transparent 30%), var(--bg-panel);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255, 107, 53, 0.15);
+  }
+  
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  }
+  
+  .panel-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+  
+  .panel-id {
+    font-size: 9px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.7); }
+  }
+  
+  .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+  
+  @keyframes scanline-move {
+    0% { transform: translateY(-100%); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(2000%); opacity: 0; }
+  }
+  
+  .scanline-overlay {
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-2), transparent);
+    box-shadow: 0 0 8px var(--accent-2);
+    animation: scanline-move 6s linear infinite;
+    pointer-events: none;
+    z-index: 5;
+  }
+  
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 8px currentColor;
+  }
+  
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+  
+  #globe {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    cursor: grab;
+  }
+  #globe:active { cursor: grabbing; }
+  
+  .feed-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background 0.2s;
+    animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .feed-item:hover { background: rgba(255,255,255,0.025); }
+  
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(15px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  .bar-bg {
+    background: rgba(255,255,255,0.04);
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+  }
+  
+  .bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 12px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6));
+  }
+  
+  .terminal {
+    background: #04060d;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    padding: 12px;
+    height: 180px;
+    overflow-y: auto;
+  }
+  
+  .terminal-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .terminal-line.new { animation: terminalIn 0.3s ease-out; }
+  
+  @keyframes terminalIn {
+    from { opacity: 0; transform: translateX(-5px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  .badge-low { color: var(--accent-2); background: rgba(0,240,255,0.08); border: 1px solid rgba(0,240,255,0.3); }
+  .badge-medium { color: var(--warning); background: rgba(255,184,0,0.08); border: 1px solid rgba(255,184,0,0.3); }
+  .badge-high { color: var(--accent); background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.3); }
+  .badge-critical { color: var(--critical); background: rgba(255,46,99,0.1); border: 1px solid rgba(255,46,99,0.4); }
+  .badge-success { color: var(--success); background: rgba(0,255,102,0.1); border: 1px solid rgba(0,255,102,0.4); }
+  
+  .badge {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    border-radius: 2px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  .threat-bar {
+    height: 5px;
+    background: linear-gradient(90deg, var(--success) 0%, var(--warning) 50%, var(--critical) 100%);
+    border-radius: 3px;
+    position: relative;
+  }
+  
+  .threat-marker {
+    position: absolute;
+    top: -3px;
+    width: 3px;
+    height: 11px;
+    background: white;
+    box-shadow: 0 0 10px white;
+    transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 1px;
+  }
+  
+  .stat-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  
+  .stat-card {
+    transition: all 0.3s ease;
+    cursor: default;
+  }
+  .stat-card:hover {
+    border-color: var(--border-bright);
+    transform: translateY(-1px);
+  }
+  
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr 380px;
+    gap: 10px;
+    padding: 10px;
+  }
+  
+  @media (max-width: 1500px) {
+    .dashboard-grid { grid-template-columns: 250px 1fr 340px; }
+  }
+  
+  @media (max-width: 1200px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
+  }
+  
+  .corner-bracket {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-color: var(--accent);
+    pointer-events: none;
+    z-index: 4;
+  }
+  
+  @keyframes alertSlide {
+    0% { transform: translate(-50%, -120%); opacity: 0; }
+    12%, 88% { transform: translate(-50%, 0); opacity: 1; }
+    100% { transform: translate(-50%, -120%); opacity: 0; }
+  }
+  .alert-show { animation: alertSlide 3.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  
+  .glow-text-accent { text-shadow: 0 0 12px rgba(255, 107, 53, 0.6); }
+  .glow-text-cyan { text-shadow: 0 0 12px rgba(0, 240, 255, 0.6); }
+  .glow-text-critical { text-shadow: 0 0 12px rgba(255, 46, 99, 0.6); }
+  
+  .grid-bg {
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  
+  .ctrl-btn {
+    padding: 5px 12px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.12em;
+    border: 1px solid var(--border-bright);
+    background: transparent;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  .ctrl-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(255, 107, 53, 0.05);
+  }
+  
+  .data-row {
+    transition: background 0.15s;
+  }
+  .data-row:hover {
+    background: rgba(255, 107, 53, 0.04);
+  }
+  
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+  }
+  .flicker { animation: flicker 3s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<!-- Alert Banner -->
+<div id="alertBanner" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 hidden">
+  <div class="bg-[var(--critical)] text-white px-6 py-2.5 mono text-xs tracking-[0.2em] font-bold shadow-2xl flex items-center gap-3" style="box-shadow: 0 0 40px rgba(255, 46, 99, 0.6);">
+    <span class="status-dot pulse-dot bg-white" style="color: white;"></span>
+    <span>CRITICAL INTRUSION DETECTED</span>
+    <span class="opacity-70">·</span>
+    <span>IP: <span id="alertIP">--</span></span>
+    <span class="opacity-70">·</span>
+    <span>ORIGIN: <span id="alertCountry">--</span></span>
+    <span class="opacity-70">·</span>
+    <span>VECTOR: <span id="alertVector">--</span></span>
+  </div>
+</div>
+
+<!-- Header -->
+<header class="border-b border-[var(--border)] bg-[var(--bg-panel)] relative z-10">
+  <div class="flex items-center justify-between px-5 py-3 flex-wrap gap-3">
+    <div class="flex items-center gap-5 flex-wrap">
+      <div class="flex items-center gap-3">
+        <div class="relative w-10 h-10 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" class="w-10 h-10" fill="none">
+            <path d="M12 2L3 7v6c0 5 3.5 9 9 11 5.5-2 9-6 9-11V7l-9-5z" stroke="#ff6b35" stroke-width="1.5"/>
+            <path d="M12 2L3 7v6c0 5 3.5 9 9 11 5.5-2 9-6 9-11V7l-9-5z" stroke="#ff6b35" stroke-width="0.5" fill="rgba(255,107,53,0.08)"/>
+            <circle cx="12" cy="11" r="2" fill="#ff6b35"/>
+            <circle cx="12" cy="11" r="4" stroke="#ff6b35" stroke-width="0.5" opacity="0.6"/>
+            <circle cx="12" cy="11" r="6.5" stroke="#ff6b35" stroke-width="0.3" opacity="0.3"/>
+          </svg>
+        </div>
+        <div>
+          <div class="font-bold text-xl tracking-[0.18em] glow-text-accent">SENTINEL</div>
+          <div class="text-[10px] text-[var(--text-muted)] tracking-[0.25em] mono">HONEYPOT.THREAT.INTELLIGENCE</div>
+        </div>
+      </div>
+      
+      <div class="h-9 w-px bg-[var(--border)]"></div>
+      
+      <div class="flex items-center gap-2">
+        <span class="status-dot pulse-dot" style="background: var(--success); color: var(--success);"></span>
+        <span class="text-xs mono tracking-wider font-semibold">SYSTEM ACTIVE</span>
+      </div>
+      
+      <div class="flex items-center gap-2 text-xs mono text-[var(--text-muted)]">
+        <span class="tracking-wider">LISTEN:</span>
+        <span class="text-[var(--accent-2)] font-semibold">22 (SSH)</span>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-5 flex-wrap">
+      <div class="text-right">
+        <div class="text-[9px] text-[var(--text-muted)] tracking-[0.2em] mb-1.5">THREAT LEVEL</div>
+        <div class="flex items-center gap-2.5">
+          <div class="threat-bar w-32"><div class="threat-marker" id="threatMarker" style="left: 65%"></div></div>
+          <span class="text-xs font-bold tracking-[0.15em] mono" id="threatLevel" style="color: var(--accent)">HIGH</span>
+        </div>
+      </div>
+      
+      <div class="h-9 w-px bg-[var(--border)]"></div>
+      
+      <div class="text-right">
+        <div class="text-[9px] text-[var(--text-muted)] tracking-[0.2em] mb-1">UTC</div>
+        <div class="mono text-lg font-bold tracking-wider" id="clock">00:00:00</div>
+      </div>
+      
+      <div class="h-9 w-px bg-[var(--border)]"></div>
+      
+      <div class="flex items-center gap-2">
+        <button id="pauseBtn" class="ctrl-btn">PAUSE</button>
+        <button id="resetBtn" class="ctrl-btn">RESET</button>
+        <button id="exportBtn" class="ctrl-btn">EXPORT</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Stats Bar -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 px-2.5 pt-2.5">
+  <div class="panel stat-card p-3.5">
+    <div class="flex items-center justify-between mb-2.5">
+      <span class="text-[10px] text-[var(--text-muted)] tracking-[0.15em] font-semibold">ATTACKS / 24H</span>
+      <span class="text-[9px] mono text-[var(--success)] flex items-center gap-1">
+        <span class="status-dot pulse-dot" style="background: var(--success); color: var(--success); width:5px; height:5px;"></span>
+        LIVE
+      </span>
+    </div>
+    <div class="stat-number text-[var(--accent)] glow-text-accent" id="statAttacks24h">0</div>
+    <div class="text-[10px] text-[var(--text-muted)] mono mt-1.5">avg <span id="statAttacksAvg" class="text-[var(--text)]">0</span>/min · <span id="statAttacksRate" class="text-[var(--accent-2)]">0</span>/sec</div>
+  </div>
+  
+  <div class="panel stat-card p-3.5">
+    <div class="flex items-center justify-between mb-2.5">
+      <span class="text-[10px] text-[var(--text-muted)] tracking-[0.15em] font-semibold">ACTIVE BANS</span>
+      <span class="text-[9px] mono text-[var(--critical)] flex items-center gap-1.5">
+        <span class="status-dot pulse-dot" style="background: var(--critical); color: var(--critical); width:5px; height:5px;"></span>
+        LIVE
+      </span>
+    </div>
+    <div class="stat-number text-[var(--critical)] glow-text-critical" id="statBans">0</div>
+    <div class="text-[10px] text-[var(--text-muted)] mono mt-1.5">bantime: 1h · maxretry: 3</div>
+  </div>
+  
+  <div class="panel stat-card p-3.5">
+    <div class="flex items-center justify-between mb-2.5">
+      <span class="text-[10px] text-[var(--text-muted)] tracking-[0.15em] font-semibold">UNIQUE IPs</span>
+      <span class="text-[9px] mono text-[var(--accent-2)]">TRACKING</span>
+    </div>
+    <div class="stat-number text-[var(--accent-2)] glow-text-cyan" id="statUniqueIPs">0</div>
+    <div class="text-[10px] text-[var(--text-muted)] mono mt-1.5">from <span id="statCountries" class="text-[var(--text)]">0</span> countries · <span id="statASNs" class="text-[var(--text)]">0</span> ASNs</div>
+  </div>
+  
+  <div class="panel stat-card p-3.5">
+    <div class="flex items-center justify-between mb-2.5">
+      <span class="text-[10px] text-[var(--text-muted)] tracking-[0.15em] font-semibold">TOP VECTOR</span>
+      <span class="text-[9px] mono text-[var(--warning)]">PORT 22</span>
+    </div>
+    <div class="stat-number text-[var(--warning)]" id="statTopVector">SSH</div>
+    <div class="text-[10px] text-[var(--text-muted)] mono mt-1.5"><span id="statTopVectorPct" class="text-[var(--text)]">0</span>% of attacks · <span id="statTopVectorCount" class="text-[var(--text)]">0</span> hits</div>
+  </div>
+</div>
+
+<!-- Main Dashboard -->
+<div class="dashboard-grid">
+  
+  <!-- Sidebar -->
+  <div class="panel flex flex-col">
+    <div class="panel-header">
+      <span class="panel-title">Attack Vectors</span>
+      <span class="panel-id">[01.A]</span>
+    </div>
+    <div class="p-3 space-y-3" id="attackVectors"></div>
+    
+    <div class="panel-header" style="border-top: 1px solid var(--border);">
+      <span class="panel-title">System Metrics</span>
+      <span class="panel-id">[01.B]</span>
+    </div>
+    <div class="p-3 space-y-2 text-xs mono">
+      <div class="flex justify-between items-center"><span class="text-[var(--text-muted)]">CPU LOAD</span><span class="text-[var(--accent)] font-semibold" id="cpuLoad">--</span></div>
+      <div class="flex justify-between items-center"><span class="text-[var(--text-muted)]">MEMORY</span><span class="text-[var(--accent-2)] font-semibold" id="memUsage">--</span></div>
+      <div class="flex justify-between items-center"><span class="text-[var(--text-muted)]">NETWORK I/O</span><span class="text-[var(--success)] font-semibold" id="netIO">--</span></div>
+      <div class="flex justify-between items-center"><span class="text-[var(--text-muted)]">ACTIVE CONN</span><span class="text-[var(--warning)] font-semibold" id="connCount">--</span></div>
+      <div class="flex justify-between items-center"><span class="text-[var(--text-muted)]">UPTIME</span><span class="text-[var(--text)] font-semibold" id="sysUptime">--</span></div>
+      <div class="flex justify-between items-center"><span class="text-[var(--text-muted)]">RULES LOADED</span><span class="text-[var(--accent)] font-semibold" id="rulesLoaded">--</span></div>
+      <div class="flex justify-between items-center"><span class="text-[var(--text-muted)]">HONEYPOT</span><span class="text-[var(--text)] font-semibold">Cowrie v3.0.5</span></div>
+    </div>
+    
+    <div class="panel-header" style="border-top: 1px solid var(--border);">
+      <span class="panel-title">Auth Methods</span>
+      <span class="panel-id">[01.C]</span>
+    </div>
+    <div class="p-3 space-y-2 text-xs mono" id="authMethods">
+      <div class="flex justify-between"><span class="text-[var(--text-muted)]">PASSWORD</span><span class="text-[var(--critical)] font-semibold" id="authPassword">--</span></div>
+      <div class="flex justify-between"><span class="text-[var(--text-muted)]">PUBLICKEY</span><span class="text-[var(--accent-2)] font-semibold" id="authPublickey">--</span></div>
+      <div class="flex justify-between"><span class="text-[var(--text-muted)]">KEYBOARD-INT</span><span class="text-[var(--warning)] font-semibold" id="authKeyboardInt">--</span></div>
+    </div>
+  </div>
+  
+  <!-- Globe Panel -->
+  <div class="panel flex flex-col relative" style="min-height: 540px;">
+    <div class="panel-header">
+      <div class="flex items-center gap-3">
+        <span class="panel-title">Global Attack Map</span>
+        <span class="text-[9px] mono text-[var(--success)] flex items-center gap-1.5">
+          <span class="status-dot pulse-dot" style="background: var(--success); color: var(--success); width:5px; height:5px;"></span>
+          REAL-TIME
+        </span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-[9px] mono text-[var(--text-dim)]" id="globeAttacks">0 ATTACKS</span>
+        <span class="panel-id">[02.G]</span>
+      </div>
+    </div>
+    <div id="globe" class="flex-1 relative grid-bg">
+      <div class="scanline-overlay"></div>
+      <!-- Corner brackets -->
+      <div class="corner-bracket top-2 left-2" style="border-top: 1px solid; border-left: 1px solid;"></div>
+      <div class="corner-bracket top-2 right-2" style="border-top: 1px solid; border-right: 1px solid;"></div>
+      <div class="corner-bracket bottom-2 left-2" style="border-bottom: 1px solid; border-left: 1px solid;"></div>
+      <div class="corner-bracket bottom-2 right-2" style="border-bottom: 1px solid; border-right: 1px solid;"></div>
+      
+      <!-- Overlay info -->
+      <div class="absolute top-3 left-3 z-10 mono text-[10px] space-y-1 pointer-events-none">
+        <div class="text-[var(--text-dim)] tracking-wider">SERVER NODE</div>
+        <div class="text-[var(--success)] font-semibold flex items-center gap-1.5">
+          <span class="status-dot pulse-dot" style="background: var(--success); color: var(--success); width:5px; height:5px;"></span>
+          <span id="serverNode">PHX1</span> · ONLINE
+        </div>
+        <div class="text-[var(--text-muted)]" id="serverCoords">33.47°N 111.99°W</div>
+        <div class="text-[var(--text-muted)] mt-2">LIVE ATTACKS: <span class="text-[var(--accent)] font-bold" id="liveAttackCount">0</span></div>
+        <div class="text-[var(--text-muted)]">SESSIONS: <span class="text-[var(--accent-2)] font-bold" id="sessionCount">0</span></div>
+      </div>
+      
+      <div class="absolute top-3 right-3 z-10 flex flex-col gap-1.5 mono text-[10px] pointer-events-none">
+        <div class="text-[var(--text-dim)] tracking-wider text-right mb-1">SEVERITY</div>
+        <div class="flex items-center gap-2 justify-end"><span class="status-dot" style="background: var(--accent-2); color: var(--accent-2); width:6px; height:6px;"></span><span class="text-[var(--text-muted)]">LOW</span></div>
+        <div class="flex items-center gap-2 justify-end"><span class="status-dot" style="background: var(--warning); color: var(--warning); width:6px; height:6px;"></span><span class="text-[var(--text-muted)]">MEDIUM</span></div>
+        <div class="flex items-center gap-2 justify-end"><span class="status-dot" style="background: var(--accent); color: var(--accent); width:6px; height:6px;"></span><span class="text-[var(--text-muted)]">HIGH</span></div>
+        <div class="flex items-center gap-2 justify-end"><span class="status-dot" style="background: var(--critical); color: var(--critical); width:6px; height:6px;"></span><span class="text-[var(--text-muted)]">CRITICAL</span></div>
+      </div>
+      
+      <div class="absolute bottom-3 left-3 z-10 mono text-[9px] text-[var(--text-dim)] pointer-events-none flex items-center gap-3">
+        <span>DRAG · ROTATE</span>
+        <span>·</span>
+        <span>SCROLL · ZOOM</span>
+      </div>
+      
+      <div class="absolute bottom-3 right-3 z-10 mono text-[9px] text-[var(--text-dim)] pointer-events-none">
+        PROJ: ORTHOGRAPHIC · WGS84
+      </div>
+    </div>
+  </div>
+  
+  <!-- Live Feed -->
+  <div class="panel flex flex-col">
+    <div class="panel-header">
+      <div class="flex items-center gap-2">
+        <span class="panel-title">Live Attack Feed</span>
+        <span class="status-dot pulse-dot" style="background: var(--accent); color: var(--accent); width:5px; height:5px;"></span>
+      </div>
+      <span class="panel-id">[03.F]</span>
+    </div>
+    <div id="liveFeed" class="overflow-y-auto flex-1" style="min-height: 480px; max-height: 540px;"></div>
+  </div>
+  
+  <!-- Top Usernames -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Top Attempted Users</span>
+      <span class="panel-id">[04.U]</span>
+    </div>
+    <div class="p-3 space-y-2.5" id="topUsernames"></div>
+  </div>
+  
+  <!-- Top Passwords -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Top Attempted Passwords</span>
+      <span class="panel-id">[05.P]</span>
+    </div>
+    <div class="p-3 space-y-2.5" id="topPasswords"></div>
+  </div>
+  
+  <!-- Timeline -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Attack Timeline · 60min</span>
+      <span class="panel-id">[06.T]</span>
+    </div>
+    <div class="p-3" style="height: 220px;">
+      <canvas id="timelineChart"></canvas>
+    </div>
+  </div>
+  
+  <!-- Geo Distribution -->
+  <div class="panel" style="grid-column: span 2;">
+    <div class="panel-header">
+      <span class="panel-title">Geographic Distribution · Top Origins</span>
+      <span class="panel-id">[07.G]</span>
+    </div>
+    <div class="p-3" id="geoDistribution"></div>
+  </div>
+  
+  <!-- Banned IPs -->
+  <div class="panel flex flex-col">
+    <div class="panel-header">
+      <span class="panel-title">Recently Banned</span>
+      <span class="panel-id">[08.B]</span>
+    </div>
+    <div id="bannedIPs" class="overflow-y-auto flex-1" style="max-height: 320px;"></div>
+  </div>
+  
+  <!-- Terminal -->
+  <div class="panel" style="grid-column: span 3;">
+    <div class="panel-header">
+      <div class="flex items-center gap-3">
+        <span class="panel-title">Live Event Stream · /var/log/sentinel.log</span>
+        <span class="flex items-center gap-1.5">
+          <span class="status-dot pulse-dot" style="background: var(--accent); color: var(--accent); width:5px; height:5px;"></span>
+          <span class="text-[9px] text-[var(--accent)] mono tracking-wider">STREAMING</span>
+        </span>
+      </div>
+      <span class="panel-id">[09.L]</span>
+    </div>
+    <div id="terminal" class="terminal"></div>
+  </div>
+
+  <!-- Interactive Session Analyzer Section -->
+  <div class="panel mt-4" style="grid-column: span 3;">
+    <div class="panel-header">
+      <div class="flex items-center gap-3">
+        <span class="panel-title">Interactive Session Analyzer</span>
+        <span class="flex items-center gap-1.5">
+          <span class="status-dot pulse-dot" style="background: var(--accent-2); color: var(--accent-2); width:5px; height:5px;"></span>
+          <span class="text-[9px] text-[var(--accent-2)] mono tracking-wider">NSA-GRADE SESSION RECONSTRUCTION</span>
+        </span>
+      </div>
+      <span class="panel-id">[07.S]</span>
+    </div>
+    <div class="grid grid-cols-[300px_1fr] h-[400px] border-t border-[var(--border)] overflow-hidden">
+      <!-- Session list -->
+      <div id="sessionAnalyzerList" class="overflow-y-auto border-r border-[var(--border)] p-2 space-y-2 select-none" style="background: rgba(4, 8, 16, 0.4);">
+        <div class="text-[10px] text-[var(--text-dim)] mono p-2">SELECT A SESSION TO REPLAY...</div>
+      </div>
+      <!-- Virtual terminal playback -->
+      <div class="flex flex-col h-full bg-black relative">
+        <div class="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border)] bg-[#040810]">
+          <span class="text-[10px] text-[var(--text-muted)] mono" id="sessionTermHeader">TERMINAL // SESSION PLAYBACK</span>
+          <button id="sessionTermPlaySpeed" class="text-[9px] text-[var(--accent-2)] border border-[var(--accent-2)] px-2 py-0.5 rounded hover:bg-[var(--accent-2)] hover:text-black transition-colors mono">SPEED: 1x</button>
+        </div>
+        <div id="sessionTerminal" class="flex-1 p-3 overflow-y-auto text-xs mono text-[var(--success)] whitespace-pre-wrap leading-relaxed select-text"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="px-5 py-4 text-center text-[10px] text-[var(--text-dim)] mono tracking-[0.2em] border-t border-[var(--border)] mt-2">
+  SENTINEL v4.2.1 · HONEYPOT THREAT INTELLIGENCE · DATA SOURCED FROM FAIL2BAN · COWRIE · DIONAEA · <span class="text-[var(--accent)]">DEFENSIVE MODE</span> · <span class="text-[var(--success)]">ALL SYSTEMS NOMINAL</span>
+</footer>
+
+<script>
+
+// =================== STATE ===================
+const ATTACK_TYPES = [
+  { name: 'SSH', port: 22, color: '#ff6b35' }
+];
+
+const state = {
+  attacks24h: 0,
+  bans: 0,
+  uniqueIPs: new Set(),
+  uniqueASNs: new Set(),
+  countries: new Set(),
+  attackTypes: {},
+  usernames: {},
+  passwords: {},
+  countryAttacks: {},
+  bannedIPs: [],
+  feed: [],
+  timeline: new Array(60).fill(0),
+  paused: false,
+  liveAttacks: 0,
+  sessions: 0
+};
+
+ATTACK_TYPES.forEach(t => state.attackTypes[t.name] = 0);
+
+
+let serverLat = 33.4656;
+let serverLon = -111.9956;
+
+// =================== GLOBE ===================
+const globeContainer = document.getElementById('globe');
+
+const myGlobe = Globe()(globeContainer)
+  .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+  .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
+  .showAtmosphere(true)
+  .atmosphereColor('rgba(0, 240, 255, 0.45)')
+  .atmosphereAltitude(0.15)
+  .pointColor(d => d.color)
+  .pointRadius(0.35)
+  .pointAltitude(0.01)
+  .pointLabel(d => `
+    <div style="background: rgba(10, 10, 15, 0.95); border: 1px solid var(--border); padding: 8px 12px; font-family: monospace; font-size: 11px; border-radius: 4px; color: var(--text); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+      <div style="color: var(--accent); font-weight: bold; margin-bottom: 4px; letter-spacing: 0.05em;">[ATTACK SOURCE]</div>
+      <div>IP: <span style="color: var(--text); font-weight: bold;">${d.ip || '?'}</span></div>
+      <div>LOC: <span style="color: var(--text-dim);">${d.city || 'Unknown'}, ${d.country || 'Unknown'}</span></div>
+      <div>ORG: <span style="color: var(--text-dim);">${d.org || 'Unknown'}</span></div>
+      <div>ASN: <span style="color: var(--text-dim);">${d.asn || 'AS0'}</span></div>
+      <div style="margin-top: 4px;">REPEATS: <span style="color: var(--warning); font-weight: bold;">${d.count || 1}</span></div>
+    </div>
+  `)
+  .arcStartLat(d => d.startLat)
+  .arcStartLng(d => d.startLng)
+  .arcEndLat(d => d.endLat)
+  .arcEndLng(d => d.endLng)
+  .arcColor(d => d.color)
+  .arcDashLength(0.45)
+  .arcDashGap(2.5)
+  .arcDashAnimateTime(1600)
+  .arcAltitude(0.25)
+  .ringColor(d => d.color)
+  .ringMaxRadius(d => d.maxR)
+  .ringPropagationSpeed(d => d.propagationSpeed)
+  .ringRepeatPeriod(d => d.repeatPeriod);
+
+myGlobe.controls().autoRotate = true;
+myGlobe.controls().autoRotateSpeed = 0.45;
+myGlobe.controls().enableZoom = true;
+myGlobe.controls().minDistance = 140;
+myGlobe.controls().maxDistance = 390;
+
+const serverMarker = {
+  lat: serverLat,
+  lng: serverLon,
+  name: 'PHX1 (Honeypot)',
+  color: '#00ff9d'
+};
+
+myGlobe.labelsData([serverMarker])
+  .labelLat(d => d.lat)
+  .labelLng(d => d.lng)
+  .labelText(d => d.name)
+  .labelColor(d => d.color)
+  .labelSize(1.5)
+  .labelDotRadius(0.5)
+  .labelResolution(2);
+
+const activeArcs = [];
+const activeMarkers = [];
+
+function updateGlobeRings() {
+  const rings = [
+    { lat: serverLat, lng: serverLon, maxR: 5, propagationSpeed: 2.2, repeatPeriod: 1200, color: '#00ff9d' },
+    ...activeMarkers.map(m => ({
+      lat: m.lat,
+      lng: m.lng,
+      maxR: 3.5,
+      propagationSpeed: 2.8,
+      repeatPeriod: 1500,
+      color: m.color
+    }))
+  ];
+  myGlobe.ringsData(rings);
+}
+
+// Initial ring setup
+updateGlobeRings();
+
+function createArc(startLat, startLon, color) {
+  const arc = {
+    startLat: startLat,
+    startLng: startLon,
+    endLat: serverLat,
+    endLng: serverLon,
+    color: color
+  };
+  activeArcs.push(arc);
+  if (activeArcs.length > 25) activeArcs.shift();
+  myGlobe.arcsData([...activeArcs]);
+}
+
+function createAttackMarker(lat, lon, color, info = {}) {
+  // If the same IP already exists in our active markers list, increment its count
+  const existing = activeMarkers.find(m => m.ip === info.ip);
+  if (existing) {
+    existing.count = (existing.count || 1) + 1;
+    existing.color = color; // update to latest severity color if needed
+  } else {
+    const marker = {
+      lat: lat,
+      lng: lon,
+      color: color,
+      ip: info.ip || '?',
+      country: info.country || 'Unknown',
+      city: info.city || 'Unknown',
+      org: info.org || 'Unknown',
+      asn: info.asn || 'AS0',
+      count: info.count || 1
+    };
+    activeMarkers.push(marker);
+    if (activeMarkers.length > 40) activeMarkers.shift();
+  }
+  
+  myGlobe.pointsData([...activeMarkers]);
+  updateGlobeRings();
+}
+
+let timelineChart = null;
+
+function updateTimelineChart() {
+  const ctx = document.getElementById('timelineChart').getContext('2d');
+  const labels = Array.from({ length: 60 }, (_, i) => `${59 - i}m`);
+  const data = state.timeline;
+
+  if (timelineChart) {
+    timelineChart.data.datasets[0].data = data;
+    timelineChart.update();
+  } else {
+    timelineChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Attacks / min',
+          data: data,
+          borderColor: '#ff6b35',
+          backgroundColor: 'rgba(255, 107, 53, 0.05)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: '#6b7280',
+              font: { size: 9, family: 'JetBrains Mono' },
+              maxTicksLimit: 6
+            }
+          },
+          y: {
+            grid: { color: '#1a2138' },
+            ticks: {
+              color: '#6b7280',
+              font: { size: 9, family: 'JetBrains Mono' },
+              stepSize: 1
+            },
+            beginAtZero: true
+          }
+        }
+      }
+    });
+  }
+}
+
+
+const sessionMetadata = {}; // sessionId -> {id, ip, countryCode, time}
+let playbackInterval = null;
+let currentSpeed = 1; // Playback speed: 1x, 2x, 5x
+
+function formatNumber(num) {
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function timestamp() {
+  return new Date().toISOString().replace('T', ' ').substring(0, 19);
+}
+
+// XSS Protection: HTML Escaping
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Request desktop notification permission on first user click
+document.addEventListener('click', () => {
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}, { once: true });
+
+// Play a high-tech synthetic audio alert using the Web Audio API
+function playAttackSound(severity) {
+  if (state.paused) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    if (severity === 'CRITICAL' || severity === 'HIGH') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    } else {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+    }
+    
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch (e) {
+    console.error("Web Audio API error", e);
+  }
+}
+
+// Show standard browser desktop notification
+function showDesktopNotification(attack) {
+  if (state.paused || Notification.permission !== 'granted') return;
+  try {
+    new Notification("🎯 Sentinel: Honeypot Intrusion", {
+      body: `IP: ${attack.ip}\nCountry: ${attack.country.name}\nUser: ${attack.username} · Pass: ${attack.password}`,
+      icon: "https://dnsmalik.duckdns.org/favicon.ico"
+    });
+  } catch (e) {
+    console.error("Notification error", e);
+  }
+}
+
+function updateServerLocation(lat, lon, label) {
+  serverLat = lat;
+  serverLon = lon;
+  
+  serverMarker.lat = lat;
+  serverMarker.lng = lon;
+  serverMarker.name = label || 'PHX1 (Honeypot)';
+  myGlobe.labelsData([serverMarker]);
+  
+  const serverNodeEl = document.getElementById('serverNode');
+  if (serverNodeEl) {
+    serverNodeEl.textContent = label || "PHX1";
+  }
+  const serverCoordsEl = document.getElementById('serverCoords');
+  if (serverCoordsEl) {
+    const latDir = lat >= 0 ? 'N' : 'S';
+    const lonDir = lon >= 0 ? 'E' : 'W';
+    serverCoordsEl.textContent = `${Math.abs(lat).toFixed(2)}°${latDir} ${Math.abs(lon).toFixed(2)}°${lonDir}`;
+  }
+  
+  updateGlobeRings();
+}
+
+// Load initial statistics summary
+async function loadSummary() {
+  try {
+    const r = await fetch('/fail2ban/api/stats/summary');
+    const d = await r.json();
+    state.attacks24h = d.total_failed_logins || 0;
+    state.bans = d.active_bans || 0;
+    
+    if (d.server) {
+      updateServerLocation(d.server.lat || 33.7, d.server.lon || -97.4, d.server.label || "ARM6-AD2");
+    }
+    
+    document.getElementById('statAttacks24h').textContent = formatNumber(state.attacks24h);
+    document.getElementById('statBans').textContent = formatNumber(state.bans);
+    document.getElementById('statUniqueIPs').textContent = formatNumber(d.unique_ips || 0);
+    document.getElementById('statCountries').textContent = d.unique_countries || 0;
+    document.getElementById('statASNs').textContent = d.unique_asns || 0;
+    
+    document.getElementById('globeAttacks').textContent = formatNumber(state.attacks24h) + ' ATTACKS';
+    document.getElementById('statAttacksAvg').textContent = (state.attacks24h / 1440).toFixed(1);
+    
+    updateThreatLevel();
+    updateAttackVectors();
+    updateAuthMethods();
+  } catch (e) {
+    console.error("Failed to load stats summary", e);
+  }
+}
+
+// Load top usernames, passwords, and countries
+async function loadTopLists() {
+  try {
+    const [unRes, pwRes, ctRes] = await Promise.all([
+      fetch('/fail2ban/api/usernames/top?limit=8').then(r => r.json()),
+      fetch('/fail2ban/api/passwords/top?limit=8').then(r => r.json()),
+      fetch('/fail2ban/api/countries/top?limit=12').then(r => r.json())
+    ]);
+    
+    // Update Usernames list
+    const maxUn = unRes[0] ? unRes[0].count : 1;
+    document.getElementById('topUsernames').innerHTML = unRes.map((x, i) => {
+      const pct = (x.count / maxUn) * 100;
+      return `
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] mono text-[var(--text-dim)]">${String(i + 1).padStart(2, '0')}</span>
+              <span class="text-xs mono font-semibold text-[var(--accent)]">${escapeHtml(x.username)}</span>
+            </div>
+            <span class="text-xs mono text-[var(--text-muted)]">${formatNumber(x.count)}</span>
+          </div>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width: ${pct}%; background: var(--accent); box-shadow: 0 0 8px rgba(255,107,53,0.5);"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    // Update Passwords list
+    const maxPw = pwRes[0] ? pwRes[0].count : 1;
+    document.getElementById('topPasswords').innerHTML = pwRes.map((x, i) => {
+      const pct = (x.count / maxPw) * 100;
+      return `
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] mono text-[var(--text-dim)]">${String(i + 1).padStart(2, '0')}</span>
+              <span class="text-xs mono font-semibold text-[var(--critical)]">${escapeHtml(x.password)}</span>
+            </div>
+            <span class="text-xs mono text-[var(--text-muted)]">${formatNumber(x.count)}</span>
+          </div>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width: ${pct}%; background: var(--critical); box-shadow: 0 0 8px rgba(255,46,99,0.5);"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Update Geo distribution list
+    const maxCt = ctRes[0] ? ctRes[0].count : 1;
+    const header = `
+      <div class="grid grid-cols-[30px_60px_1fr_90px_60px_80px] items-center gap-2 pb-2 mb-1 border-b border-[var(--border-bright)] text-[9px] mono text-[var(--text-dim)] tracking-[0.15em] uppercase">
+        <span>#</span>
+        <span>Code</span>
+        <span>Country</span>
+        <span>Distribution</span>
+        <span class="text-right">Hits</span>
+        <span class="text-right">Share</span>
+      </div>
+    `;
+    const htmlCt = ctRes.map((x, i) => {
+      const pct = (x.count / maxCt) * 100;
+      const totalPct = state.attacks24h > 0 ? ((x.count / state.attacks24h) * 100).toFixed(1) : 0;
+      return `
+        <div class="grid grid-cols-[30px_60px_1fr_90px_60px_80px] items-center gap-2 py-1.5 border-b border-[var(--border)] data-row">
+          <span class="text-xs mono font-bold text-[var(--text-muted)]">${String(i + 1).padStart(2, '0')}</span>
+          <span class="text-xs mono font-bold text-[var(--accent-2)]">${escapeHtml(x.country_code)}</span>
+          <span class="text-xs text-[var(--text)] truncate">${escapeHtml(x.country)}</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width: ${pct}%; background: linear-gradient(90deg, var(--accent-2), var(--accent));"></div>
+          </div>
+          <span class="text-xs mono text-right text-[var(--text-muted)]">${formatNumber(x.count)}</span>
+          <span class="text-xs mono text-right text-[var(--accent)] font-semibold">${totalPct}%</span>
+        </div>
+      `;
+    }).join('');
+    document.getElementById('geoDistribution').innerHTML = header + htmlCt;
+    
+  } catch (e) {
+    console.error("Failed to load top lists", e);
+  }
+}
+
+// Load system resources metrics
+async function loadSystemMetrics() {
+  try {
+    const r = await fetch('/fail2ban/api/sys/stats');
+    const d = await r.json();
+    
+    // CPU Load
+    const cpuEl = document.getElementById('cpuLoad');
+    if (cpuEl) cpuEl.textContent = `${d.cpu.toFixed(1)}%`;
+    
+    // Memory
+    const memEl = document.getElementById('memUsage');
+    if (memEl) memEl.textContent = `${(d.mem / 100 * 8).toFixed(1)} / 8.0 GB`;
+    
+    // Network I/O
+    const netEl = document.getElementById('netIO');
+    if (netEl) netEl.textContent = `↓ ${d.net_speed}`;
+    
+    // Active connections
+    const connEl = document.getElementById('connCount');
+    if (connEl) connEl.textContent = d.active_conns;
+    
+    // Uptime
+    const uptimeEl = document.getElementById('sysUptime');
+    if (uptimeEl && d.uptime) {
+      const uptimeSec = d.uptime;
+      const days = Math.floor(uptimeSec / 86400);
+      const hours = Math.floor((uptimeSec % 86400) / 3600);
+      const minutes = Math.floor((uptimeSec % 3600) / 60);
+      uptimeEl.textContent = `${days}d ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(Math.floor(uptimeSec % 60)).padStart(2, '0')}`;
+    }
+
+    // Rules Loaded — real count from fail2ban via API
+    const rulesEl = document.getElementById('rulesLoaded');
+    if (rulesEl && d.jail_count !== undefined) {
+      rulesEl.textContent = d.jail_count + ' Jail' + (d.jail_count !== 1 ? 's' : '');
+    }
+  } catch (e) {
+    console.error("Failed to load system metrics", e);
+  }
+}
+
+// Load active bans from fail2ban
+async function loadBans() {
+  try {
+    const r = await fetch('/fail2ban/api/bans/active');
+    const data = await r.json();
+    state.bans = data.length;
+    
+    const html = data.slice(0, 12).map(b => {
+      const timeStr = b.banned_at ? b.banned_at.split(' ')[1] || b.banned_at : "00:00:00";
+      return `
+        <div class="px-3 py-2 border-b border-[var(--border)] data-row">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              <span class="status-dot" style="background: var(--critical); color: var(--critical); width:6px; height:6px;"></span>
+              <span class="text-xs mono font-bold text-[var(--text)]">${escapeHtml(b.ip)}</span>
+            </div>
+            <span class="text-[9px] mono text-[var(--text-muted)]">ACTIVE BAN</span>
+          </div>
+          <div class="flex items-center justify-between text-[10px] mono text-[var(--text-muted)]">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[var(--accent-2)] font-semibold">${escapeHtml(b.jail)}</span>
+              <span class="text-[var(--text-dim)]">·</span>
+              <span class="text-[var(--warning)] font-semibold">PORT:${b.jail === 'sshd' ? '2222' : '22'}</span>
+            </div>
+            <span class="text-[var(--critical)]">BANNED</span>
+          </div>
+          <div class="text-[9px] mono text-[var(--text-dim)] mt-0.5">${escapeHtml(timeStr)}</div>
+        </div>
+      `;
+    }).join('');
+    document.getElementById('bannedIPs').innerHTML = html;
+  } catch (e) {
+    console.error("Failed to load bans", e);
+  }
+}
+
+// Load timeline chart data
+async function loadTimeseries() {
+  try {
+    const r = await fetch('/fail2ban/api/timeseries?bucket=minute');
+    const d = await r.json();
+    
+    const nowMin = Math.floor(Date.now() / 60000) * 60;
+    const timeline = new Array(60).fill(0);
+    d.forEach(x => {
+      const diffMin = Math.floor((nowMin - x.ts) / 60);
+      if (diffMin >= 0 && diffMin < 60) {
+        timeline[59 - diffMin] = x.count;
+      }
+    });
+    state.timeline = timeline;
+    updateTimelineChart();
+    updateThreatLevel();
+  } catch (e) {
+    console.error("Failed to load timeseries", e);
+  }
+}
+
+// Load recent attacks to populate terminal
+async function loadRecentAttacks() {
+  try {
+    const r = await fetch('/fail2ban/api/attacks/recent?limit=40');
+    const data = await r.json();
+    
+    // Populate feed and session metadata
+    state.feed = data.map(ev => {
+      const sId = ev.session || 'unknown';
+      if (sId !== 'unknown' && !sessionMetadata[sId]) {
+        sessionMetadata[sId] = {
+          id: sId,
+          ip: ev.ip,
+          countryCode: ev.country_code || '??',
+          time: ev.ts ? ev.ts.split('T')[1]?.substring(0, 8) || ev.ts : '00:00:00'
+        };
+      }
+      const isSuccess = ev.eventid === 'cowrie.login.success';
+      return {
+        id: sId.slice(0, 8),
+        timestamp: ev.ts ? ev.ts.replace('T', ' ').slice(0, 19) : timestamp(),
+        ip: ev.ip,
+        country: { name: ev.country, code: ev.country_code },
+        city: { name: 'Unknown' },
+        username: ev.username,
+        password: ev.password || '[empty]',
+        type: ev.is_real_ssh ? 'REAL SSH' : 'SSH',
+        port: ev.is_real_ssh ? 2222 : 22,
+        severity: isSuccess ? 'SUCCESS' : (ev.username === 'root' || ev.username === 'admin') ? 'HIGH' : 'MEDIUM',
+        isSuccess: isSuccess
+      };
+    });
+    
+    updateFeed();
+    updateSessionList(Object.values(sessionMetadata).reverse().slice(0, 15));
+    
+    // Print to console reversed (oldest first so it streams nicely)
+    const terminal = document.getElementById('terminal');
+    terminal.innerHTML = '';
+    
+    [...state.feed].reverse().forEach(attack => {
+      const div = document.createElement('div');
+      div.className = 'terminal-line';
+      const statusSpan = attack.isSuccess ? 
+        `<span class="text-[var(--success)] font-bold">[SUCCESS]</span>` : 
+        `<span class="text-[var(--critical)]">FAIL</span>`;
+      div.innerHTML = `<span class="text-[var(--text-dim)]">[${escapeHtml(attack.timestamp)}]</span> <span class="text-[var(--warning)]">[${escapeHtml(attack.type)}:${escapeHtml(attack.port)}]</span> ${statusSpan} <span class="text-[var(--text-muted)]">from</span> <span class="text-[var(--text)]">${escapeHtml(attack.ip)}</span> <span class="text-[var(--accent-2)]">(${escapeHtml(attack.country.code)})</span> <span class="text-[var(--text-muted)]">user:</span><span class="text-[var(--accent)]">${escapeHtml(attack.username)}</span> <span class="text-[var(--text-muted)]">pass:</span><span class="text-[var(--critical)]">${escapeHtml(attack.password)}</span>`;
+      terminal.appendChild(div);
+    });
+    terminal.scrollTop = terminal.scrollHeight;
+    
+  } catch (e) {
+    console.error("Failed to load recent attacks", e);
+  }
+}
+
+async function loadHistoricalGeo() {
+  try {
+    const r = await fetch('/fail2ban/api/attacks/geo');
+    const data = await r.json();
+    
+    // Clear existing markers
+    activeMarkers.length = 0;
+    
+    // Plot top active attack locations
+    data.slice(0, 100).forEach(g => {
+      if (g.lat === 0 && g.lon === 0) return;
+      const color = g.count > 50 ? '#ff2e63' : g.count > 10 ? '#ff6b35' : '#00f0ff';
+      createAttackMarker(g.lat, g.lon, color, g);
+    });
+  } catch (e) {
+    console.error("Failed to load historical geo", e);
+  }
+}
+
+// Helper badge formatter
+function getSeverityBadge(sev) {
+  const badgeClass = {
+    LOW: 'badge-low',
+    MEDIUM: 'badge-medium',
+    HIGH: 'badge-high',
+    CRITICAL: 'badge-critical',
+    SUCCESS: 'badge-success'
+  }[sev] || 'badge-low';
+  return `<span class="badge ${badgeClass}">${escapeHtml(sev)}</span>`;
+}
+
+// UI List Updates
+function updateFeed() {
+  const html = state.feed.slice(0, 18).map(a => `
+    <div class="feed-item">
+      <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-2">
+          ${getSeverityBadge(a.severity)}
+          <span class="text-[9px] mono text-[var(--text-dim)]">${escapeHtml(a.id)}</span>
+          <span class="text-[10px] mono text-[var(--warning)] font-bold">${escapeHtml(a.type)}:${escapeHtml(a.port)}</span>
+        </div>
+        <span class="text-[9px] mono text-[var(--text-dim)]">${escapeHtml(a.timestamp.substring(11, 19))}</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-xs mono font-bold text-[var(--text)]">${escapeHtml(a.ip)}</span>
+          <span class="text-[10px] mono text-[var(--accent-2)] font-semibold">${escapeHtml(a.country.code)}</span>
+          <span class="text-[10px] text-[var(--text-muted)] truncate">${escapeHtml(a.city.name)}</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 mt-1 text-[10px] mono">
+        <span class="text-[var(--text-dim)]">u:</span>
+        <span class="text-[var(--accent)] font-semibold">${escapeHtml(a.username)}</span>
+        <span class="text-[var(--text-dim)]">·</span>
+        <span class="text-[var(--text-dim)]">p:</span>
+        <span class="text-[var(--critical)] font-semibold">${escapeHtml(a.password)}</span>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('liveFeed').innerHTML = html;
+}
+
+// Update the active sessions list panel
+function updateSessionList(sessionsArray) {
+  const listEl = document.getElementById('sessionAnalyzerList');
+  if (!listEl) return;
+  
+  if (sessionsArray.length === 0) {
+    listEl.innerHTML = '<div class="text-[10px] text-[var(--text-dim)] mono p-2">NO ACTIVE SESSIONS FOUND</div>';
+    return;
+  }
+  
+  const html = sessionsArray.map(s => {
+    return `
+      <div class="p-2 border border-[var(--border)] hover:border-[var(--accent-2)] bg-[#0a0f1c] cursor-pointer rounded transition-all flex justify-between items-center session-item" id="session-item-${s.id}">
+        <div class="mono text-[10px]">
+          <div class="font-bold text-[var(--text)]">${escapeHtml(s.ip)}</div>
+          <div class="text-[var(--text-dim)]">${escapeHtml(s.time)} (${escapeHtml(s.countryCode)})</div>
+        </div>
+        <span class="text-[8px] bg-[var(--accent-2)] text-black px-1.5 py-0.5 rounded font-bold mono">REPLAY</span>
+      </div>
+    `;
+  }).join('');
+  
+  listEl.innerHTML = html;
+  
+  // Attach event click listeners to elements
+  sessionsArray.forEach(s => {
+    const el = document.getElementById(`session-item-${s.id}`);
+    if (el) {
+      el.addEventListener('click', () => {
+        replaySession(s.id);
+      });
+    }
+  });
+}
+
+// Playback terminal session log reconstruction
+async function replaySession(sessionId) {
+  if (playbackInterval) clearTimeout(playbackInterval);
+  const term = document.getElementById('sessionTerminal');
+  const termHeader = document.getElementById('sessionTermHeader');
+  
+  termHeader.textContent = `TERMINAL // PLAYBACK SESSION: ${sessionId}`;
+  term.innerHTML = `<span class="text-[var(--text-muted)]">[SYSTEM] Fetching session logs from database...</span>\n`;
+  
+  try {
+    const res = await fetch(`/fail2ban/api/sessions/${sessionId}`);
+    const events = await res.json();
+    
+    if (events.length === 0) {
+      term.innerHTML = `<span class="text-[var(--critical)]">[SYSTEM] Session details not found or logs empty.</span>\n`;
+      return;
+    }
+    
+    term.innerHTML = `<span class="text-[var(--success)]">[SYSTEM] Session logs reconstructed. Initiating playback at ${currentSpeed}x...</span>\n\n`;
+    
+    let step = 0;
+    
+    function nextStep() {
+      if (step >= events.length) {
+        term.innerHTML += `\n<span class="text-[var(--text-muted)]">[SYSTEM] End of session playback.</span>\n`;
+        term.scrollTop = term.scrollHeight;
+        return;
+      }
+      
+      const ev = events[step++];
+      let text = '';
+      
+      if (ev.eventid === 'cowrie.session.connect') {
+        text = `[CONNECT] Inbound SSH connection from ${escapeHtml(ev.src_ip)} on local port ${escapeHtml(ev.dst_port)}\n`;
+      } else if (ev.eventid === 'cowrie.client.version') {
+        text = `[CLIENT] Identification string: ${escapeHtml(ev.version)}\n`;
+      } else if (ev.eventid === 'cowrie.client.kex') {
+        text = `[KEX] Key exchange algorithm negotiated. Hassh: ${escapeHtml(ev.hassh)}\n`;
+      } else if (ev.eventid === 'cowrie.login.failed') {
+        text = `[AUTH] SSH login attempt failed. Username: '${escapeHtml(ev.username)}' Password: '${escapeHtml(ev.password)}'\n`;
+      } else if (ev.eventid === 'cowrie.login.success') {
+        text = `[AUTH] SSH login attempt succeeded! Username: '${escapeHtml(ev.username)}' Password: '${escapeHtml(ev.password)}'\n`;
+      } else if (ev.eventid === 'cowrie.command.input') {
+        text = `\n<span class="text-[var(--text)]">$ ${escapeHtml(ev.input)}</span>\n`;
+        // Simulate Cowrie outputs for NSA visual effect
+        let output = '';
+        const cmd = ev.input.trim();
+        if (cmd.includes('uname')) {
+          output = 'Linux mail-gw01 5.15.0-88-generic #98-Ubuntu SMP Mon Oct 2 15:18:56 UTC 2023 x86_64 x86_64 GNU/Linux\n';
+        } else if (cmd.includes('whoami')) {
+          output = 'root\n';
+        } else if (cmd.includes('ls')) {
+          output = 'total 12\ndrwxr-xr-x 2 root root 4096 Jun 30 08:00 .\ndrwxr-xr-x 3 root root 4096 Jun 30 08:00 ..\n-rwxr-xr-x 1 root root  284 Jun 30 08:00 arm7\n';
+        } else if (cmd.includes('wget') || cmd.includes('curl')) {
+          output = 'Connecting to remote server... connected.\nHTTP request sent, awaiting response... 200 OK\nSaving to: "arm7"\n';
+        } else if (cmd.includes('chmod')) {
+          output = '';
+        } else {
+          output = `bash: ${escapeHtml(cmd.split(' ')[0])}: command not found\n`;
+        }
+        if (output) {
+          text += `<span class="text-[var(--text-muted)]">${output}</span>`;
+        }
+      } else if (ev.eventid === 'cowrie.session.closed') {
+        text = `\n[DISCONNECT] Host disconnected. Session duration: ${(ev.duration_ms / 1000).toFixed(1)} seconds\n`;
+      }
+      
+      if (text) {
+        term.innerHTML += text;
+      }
+      term.scrollTop = term.scrollHeight;
+      
+      const delay = ev.eventid === 'cowrie.command.input' ? 1200 / currentSpeed : 450 / currentSpeed;
+      playbackInterval = setTimeout(nextStep, delay);
+    }
+    
+    nextStep();
+    
+  } catch (e) {
+    console.error(e);
+    term.innerHTML += `<span class="text-[var(--critical)]">[SYSTEM] Exception during playback loop.</span>\n`;
+  }
+}
+
+// Live update left sidebar attack vectors dynamically
+function updateAttackVectors() {
+  const total = state.attacks24h || 1;
+  const html = ATTACK_TYPES.map(t => {
+    const count = state.attacks24h;
+    const pct = 100.0;
+    return `
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2">
+            <span class="status-dot" style="background: ${t.color}; color: ${t.color}; width:6px; height:6px;"></span>
+            <span class="text-xs mono font-semibold">${t.name}</span>
+            <span class="text-[9px] text-[var(--text-dim)] mono">:${t.port}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs mono text-[var(--text-muted)]">${formatNumber(count)}</span>
+            <span class="text-[10px] mono w-10 text-right font-semibold" style="color: ${t.color}">${pct.toFixed(1)}%</span>
+          </div>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width: ${pct}%; background: ${t.color}; box-shadow: 0 0 8px ${t.color}80;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('attackVectors').innerHTML = html;
+}
+
+// Update authentication methods dynamically from real event data
+function updateAuthMethods() {
+  // Cowrie only captures password-based attacks; PUBLICKEY and KEYBOARD-INTERACTIVE
+  // are tracked separately via cowrie.login.failed eventid fields when present.
+  let pw = 0, pubkey = 0, kbd = 0;
+  state.feed.forEach(a => {
+    const method = (a.auth_method || 'password').toLowerCase();
+    if (method.includes('publickey')) pubkey++;
+    else if (method.includes('keyboard')) kbd++;
+    else pw++;
+  });
+  const total = pw + pubkey + kbd || 1;
+  const pwEl = document.getElementById('authPassword');
+  const pkEl = document.getElementById('authPublickey');
+  const kbEl = document.getElementById('authKeyboardInt');
+  if (pwEl) pwEl.textContent = ((pw / total) * 100).toFixed(1) + '%';
+  if (pkEl) pkEl.textContent = ((pubkey / total) * 100).toFixed(1) + '%';
+  if (kbEl) kbEl.textContent = ((kbd / total) * 100).toFixed(1) + '%';
+}
+
+function addTerminalLine(attack, banned) {
+  const terminal = document.getElementById('terminal');
+  const time = attack.timestamp;
+  
+  const lines = [];
+  lines.push(`<span class="text-[var(--text-dim)]">[${time}]</span> <span class="text-[var(--warning)]">[${attack.type}:${attack.port}]</span> <span class="text-[var(--critical)]">FAIL</span> <span class="text-[var(--text-muted)]">from</span> <span class="text-[var(--text)]">${attack.ip}</span> <span class="text-[var(--accent-2)]">(${attack.country.code})</span> <span class="text-[var(--text-muted)]">user:</span><span class="text-[var(--accent)]">${attack.username}</span> <span class="text-[var(--text-muted)]">pass:</span><span class="text-[var(--critical)]">${attack.password}</span>`);
+  
+  if (banned) {
+    lines.push(`<span class="text-[var(--text-dim)]">[${time}]</span> <span class="text-[var(--accent)]">[BAN]</span> <span class="text-[var(--text)]">${attack.ip}</span> <span class="text-[var(--text-muted)]">-</span> <span class="text-[var(--accent)]">banned for 24h</span> <span class="text-[var(--text-muted)]">(maxretry exceeded · ${attack.severity})</span>`);
+  }
+  
+  lines.forEach(line => {
+    const div = document.createElement('div');
+    div.className = 'terminal-line new';
+    div.innerHTML = line;
+    terminal.appendChild(div);
+  });
+  
+  while (terminal.children.length > 80) {
+    terminal.removeChild(terminal.firstChild);
+  }
+  
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function showAlertBanner(attack) {
+  const banner = document.getElementById('alertBanner');
+  document.getElementById('alertIP').textContent = attack.ip;
+  document.getElementById('alertCountry').textContent = attack.country.name + ' (' + attack.country.code + ')';
+  document.getElementById('alertVector').textContent = attack.type + ':' + attack.port;
+  banner.classList.remove('hidden');
+  banner.classList.add('alert-show');
+  setTimeout(() => {
+    banner.classList.add('hidden');
+    banner.classList.remove('alert-show');
+  }, 3500);
+}
+
+// System stats and details refresh
+async function refreshDetails() {
+  if (state.paused) return;
+  await loadSummary();
+  await loadBans();
+}
+
+function updateThreatLevel() {
+  const recentAttacks = state.timeline.slice(-5).reduce((s, v) => s + v, 0);
+  let level = 'LOW';
+  let pct = 20;
+  let color = 'var(--success)';
+  
+  if (recentAttacks > 25) { level = 'CRITICAL'; pct = 95; color = 'var(--critical)'; }
+  else if (recentAttacks > 18) { level = 'HIGH'; pct = 75; color = 'var(--accent)'; }
+  else if (recentAttacks > 10) { level = 'ELEVATED'; pct = 55; color = 'var(--warning)'; }
+  else if (recentAttacks > 5) { level = 'GUARDED'; pct = 35; color = 'var(--accent-2)'; }
+  
+  const levelEl = document.getElementById('threatLevel');
+  levelEl.textContent = level;
+  levelEl.style.color = color;
+  document.getElementById('threatMarker').style.left = pct + '%';
+}
+
+function severityColor(sev) {
+  return { LOW: '#00f0ff', MEDIUM: '#ffb800', HIGH: '#ff6b35', CRITICAL: '#ff2e63', SUCCESS: '#00ff66' }[sev];
+}
+
+// Subscribe to real-time events via Server-Sent Events (SSE)
+let sseTimer = null;
+function subscribeSSE() {
+  const es = new EventSource('/fail2ban/api/stream');
+  
+  es.onmessage = (msg) => {
+    try {
+      const ev = JSON.parse(msg.data);
+      if (ev.eventid === 'hello') return;
+      
+      if (ev.eventid === 'cowrie.login.failed' || ev.eventid === 'cowrie.login.success') {
+        const isSuccess = ev.eventid === 'cowrie.login.success';
+        const severity = isSuccess ? 'SUCCESS' : (ev.username === 'root' || ev.username === 'admin') ? 'HIGH' : 'MEDIUM';
+        const color = severityColor(severity);
+        
+        const attack = {
+          id: ev.session ? ev.session.slice(0, 8) : Math.random().toString(36).slice(2, 10),
+          timestamp: ev.timestamp ? ev.timestamp.replace('T', ' ').slice(0, 19) : timestamp(),
+          time: Date.now(),
+          ip: ev.src_ip || '?',
+          country: { name: ev.country || 'Unknown', code: ev.country_code || '??' },
+          city: { name: ev.city || 'Unknown' },
+          username: ev.username || '',
+          password: ev.password || '[empty]',
+          type: ev.is_real_ssh ? 'REAL SSH' : 'SSH',
+          port: ev.is_real_ssh ? 2222 : 22,
+          severity: severity,
+          color: color,
+          asn: ev.asn || 'AS0'
+        };
+        
+        // 1. Update stats state
+        state.attacks24h++;
+        state.liveAttacks++;
+        state.sessions++;
+        
+        // 2. Play sound and show desktop notification
+        playAttackSound(severity);
+        showDesktopNotification(attack);
+        
+        // 3. Add to feed, terminal, and session playback lists
+        state.feed.unshift(attack);
+        if (state.feed.length > 50) state.feed.pop();
+        updateFeed();
+        
+        addTerminalLine(attack, false);
+        
+        const sId = ev.session;
+        if (sId && !sessionMetadata[sId]) {
+          sessionMetadata[sId] = {
+            id: sId,
+            ip: ev.src_ip,
+            countryCode: ev.country_code || '??',
+            time: new Date().toISOString().substring(11, 19)
+          };
+          updateSessionList(Object.values(sessionMetadata).reverse().slice(0, 15));
+        }
+        
+        // 4. Globe animation
+        if (ev.lat && ev.lon && !(ev.lat === 0 && ev.lon === 0)) {
+          createArc(ev.lat, ev.lon, color);
+          createAttackMarker(ev.lat, ev.lon, color, {
+            ip: ev.src_ip,
+            country: ev.country,
+            city: ev.city || ev.country,
+            org: ev.org,
+            asn: ev.asn
+          });
+        }
+        
+        // 5. Critical Alert Banner
+        if (ev.username === 'root' && Math.random() < 0.3) {
+          attack.severity = 'CRITICAL';
+          attack.color = severityColor('CRITICAL');
+          showAlertBanner(attack);
+        }
+        
+        // 6. Debounce reloading lists to avoid hammering server
+        clearTimeout(sseTimer);
+        sseTimer = setTimeout(() => {
+          refreshDetails();
+          loadTopLists();
+          loadTimeseries();
+        }, 1500);
+      }
+    } catch (e) {
+      console.error("SSE message error", e);
+    }
+  };
+  
+  es.onerror = () => {
+    es.close();
+    console.log("SSE error, reconnecting...");
+    setTimeout(subscribeSSE, 5000);
+  };
+}
+
+// Clock update
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toISOString().substring(11, 19);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Controls
+document.getElementById('pauseBtn').addEventListener('click', (e) => {
+  state.paused = !state.paused;
+  e.target.textContent = state.paused ? 'RESUME' : 'PAUSE';
+  myGlobe.controls().autoRotate = !state.paused;
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  document.getElementById('terminal').innerHTML = '<div class="terminal-line"><span class="text-[var(--text-muted)]">[SYSTEM] Console cleared. Listening for real-time traffic...</span></div>';
+  activeArcs.length = 0;
+  activeMarkers.length = 0;
+  myGlobe.arcsData([]);
+  myGlobe.pointsData([]);
+  updateGlobeRings();
+  loadHistoricalGeo();
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const exportData = {
+    exportTime: new Date().toISOString(),
+    server: `PHX1 · ${serverLat}°N ${serverLon}°E`,
+    stats: {
+      attacks24h: state.attacks24h,
+      activeBans: state.bans
+    },
+    recentFeed: state.feed.slice(0, 30)
+  };
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sentinel-export-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// Session speed control
+document.getElementById('sessionTermPlaySpeed').addEventListener('click', (e) => {
+  if (currentSpeed === 1) currentSpeed = 2;
+  else if (currentSpeed === 2) currentSpeed = 5;
+  else currentSpeed = 1;
+  e.target.textContent = `SPEED: ${currentSpeed}x`;
+});
+
+// Resize using ResizeObserver (solves flexbox race conditions on load)
+const resizeObserver = new ResizeObserver((entries) => {
+  for (let entry of entries) {
+    const w = entry.contentRect.width || globeContainer.clientWidth;
+    const h = entry.contentRect.height || globeContainer.clientHeight;
+    if (w > 0 && h > 0) {
+      myGlobe.width(w).height(h);
+    }
+  }
+});
+resizeObserver.observe(globeContainer);
+
+// Boot dashboard
+async function boot() {
+  document.getElementById('terminal').innerHTML = '<div class="terminal-line"><span class="text-[var(--success)]">[SYSTEM] Connecting to fail2ban threat intelligence API...</span></div>';
+  
+  await loadSummary();
+  await loadRecentAttacks();
+  await loadTopLists();
+  await loadBans();
+  await loadTimeseries();
+  await loadSystemMetrics();
+  await loadHistoricalGeo();
+  
+  document.getElementById('terminal').innerHTML += '<div class="terminal-line"><span class="text-[var(--success)]">[SYSTEM] Connection established. SSE stream listening...</span></div>';
+  
+  subscribeSSE();
+  
+  // Periodic background refreshes
+  setInterval(loadSystemMetrics, 3000); // 3s
+  setInterval(loadBans, 15000);        // 15s
+  setInterval(loadTimeseries, 60000);  // 1m
+}
+
+boot();
+</script>
+</body>
+</html>
