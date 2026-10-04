@@ -120,10 +120,28 @@
     box-shadow: 0 0 8px currentColor;
   }
   
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+  /* High-Contrast Cross-Browser Scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #ff6b35 #0c1222;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #060a17;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a3552;
+    border: 1px solid rgba(255, 107, 53, 0.4);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #ff6b35;
+    box-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
+  }
   
   #globe {
     width: 100%;
@@ -175,14 +193,15 @@
     font-size: 11px;
     line-height: 1.55;
     padding: 12px;
-    height: 180px;
-    overflow-y: auto;
+    height: 200px;
+    overflow-y: scroll !important;
+    overflow-x: auto;
   }
   
   .terminal-line {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
   }
   .terminal-line.new { animation: terminalIn 0.3s ease-out; }
   
@@ -554,7 +573,7 @@
       </div>
       <span class="panel-id">[03.F]</span>
     </div>
-    <div id="liveFeed" class="overflow-y-auto flex-1" style="min-height: 480px; max-height: 540px;"></div>
+    <div id="liveFeed" class="overflow-y-scroll flex-1" style="min-height: 480px; max-height: 540px;"></div>
   </div>
   
   <!-- Top Usernames -->
@@ -563,7 +582,7 @@
       <span class="panel-title">Top Attempted Users</span>
       <span class="panel-id">[04.U]</span>
     </div>
-    <div class="p-3 space-y-2.5" id="topUsernames"></div>
+    <div class="p-3 space-y-2.5 overflow-y-auto" style="max-height: 250px;" id="topUsernames"></div>
   </div>
   
   <!-- Top Passwords -->
@@ -572,7 +591,7 @@
       <span class="panel-title">Top Attempted Passwords</span>
       <span class="panel-id">[05.P]</span>
     </div>
-    <div class="p-3 space-y-2.5" id="topPasswords"></div>
+    <div class="p-3 space-y-2.5 overflow-y-auto" style="max-height: 250px;" id="topPasswords"></div>
   </div>
   
   <!-- Top Attack ASNs -->
@@ -581,7 +600,7 @@
       <span class="panel-title">Top Attack Networks (ASNs)</span>
       <span class="panel-id">[05.N]</span>
     </div>
-    <div class="p-3 space-y-2.5" id="topASNs"></div>
+    <div class="p-3 space-y-2.5 overflow-y-auto" style="max-height: 250px;" id="topASNs"></div>
   </div>
   
   <!-- Timeline -->
@@ -610,7 +629,7 @@
       <span class="panel-title">Recently Banned</span>
       <span class="panel-id">[08.B]</span>
     </div>
-    <div id="bannedIPs" class="overflow-y-auto flex-1" style="max-height: 320px;"></div>
+    <div id="bannedIPs" class="overflow-y-scroll flex-1" style="max-height: 320px;"></div>
   </div>
   
   <!-- Terminal -->
@@ -623,9 +642,13 @@
           <span class="text-[9px] text-[var(--accent)] mono tracking-wider">STREAMING</span>
         </span>
       </div>
-      <span class="panel-id">[09.L]</span>
+      <div class="flex items-center gap-2">
+        <button id="terminalScrollLockBtn" onclick="toggleTerminalAutoScroll()" class="text-[9px] text-[var(--success)] border border-[var(--success)] px-2 py-0.5 rounded mono hover:bg-[var(--success)] hover:text-black transition-colors">AUTO-SCROLL: ON</button>
+        <button onclick="document.getElementById('terminal').innerHTML=''" class="text-[9px] text-[var(--text-muted)] hover:text-white border border-[var(--border)] px-1.5 py-0.5 rounded mono transition-colors">CLEAR</button>
+        <span class="panel-id">[09.L]</span>
+      </div>
     </div>
-    <div id="terminal" class="terminal"></div>
+    <div id="terminal" class="terminal select-text"></div>
   </div>
 
   <!-- Interactive Session Analyzer Section -->
@@ -640,9 +663,9 @@
       </div>
       <span class="panel-id">[07.S]</span>
     </div>
-    <div class="grid grid-cols-[240px_1fr_240px] h-[400px] border-t border-[var(--border)] overflow-hidden">
+    <div class="grid grid-cols-[240px_1fr_260px] h-[420px] border-t border-[var(--border)] overflow-hidden">
       <!-- Session list -->
-      <div id="sessionAnalyzerList" class="overflow-y-auto border-r border-[var(--border)] p-2 space-y-2 select-none" style="background: rgba(4, 8, 16, 0.4);">
+      <div id="sessionAnalyzerList" class="overflow-y-scroll border-r border-[var(--border)] p-2 space-y-2 select-none" style="background: rgba(4, 8, 16, 0.4); max-height: 420px;">
         <div class="text-[10px] text-[var(--text-dim)] mono p-2">SELECT A SESSION TO REPLAY...</div>
       </div>
       <!-- Virtual terminal playback -->
@@ -651,12 +674,15 @@
           <span class="text-[10px] text-[var(--text-muted)] mono" id="sessionTermHeader">TERMINAL // SESSION PLAYBACK</span>
           <button id="sessionTermPlaySpeed" class="text-[9px] text-[var(--accent-2)] border border-[var(--accent-2)] px-2 py-0.5 rounded hover:bg-[var(--accent-2)] hover:text-black transition-colors mono">SPEED: 1x</button>
         </div>
-        <div id="sessionTerminal" class="flex-1 p-3 overflow-y-auto text-xs mono text-[var(--success)] whitespace-pre-wrap leading-relaxed select-text"></div>
+        <div id="sessionTerminal" class="flex-1 p-3 overflow-y-scroll text-xs mono text-[var(--success)] whitespace-pre-wrap leading-relaxed select-text"></div>
       </div>
       <!-- Captured commands list -->
-      <div id="sessionCommandsPanel" class="overflow-y-auto border-l border-[var(--border)] p-2 flex flex-col gap-1 select-none" style="background: rgba(4, 8, 16, 0.4);">
-        <div class="text-[10px] text-[var(--text-dim)] mono p-1 border-b border-[var(--border)] mb-1">COMMAND HISTORY</div>
-        <div id="sessionCommandsList" class="flex-1 space-y-1.5 overflow-y-auto pr-1">
+      <div id="sessionCommandsPanel" class="border-l border-[var(--border)] p-2 flex flex-col gap-1 select-none overflow-hidden" style="background: rgba(4, 8, 16, 0.4); max-height: 420px;">
+        <div class="flex items-center justify-between text-[10px] text-[var(--text-dim)] mono p-1 border-b border-[var(--border)] mb-1 shrink-0">
+          <span>COMMAND HISTORY</span>
+          <span class="text-[8px] text-[var(--accent-2)] bg-[#101b33] px-1 rounded">SCROLLABLE</span>
+        </div>
+        <div id="sessionCommandsList" class="flex-1 space-y-1.5 overflow-y-scroll pr-1 select-text" style="max-height: 370px;">
           <div class="text-[9px] text-[var(--text-muted)] mono italic p-1">No session selected.</div>
         </div>
       </div>
@@ -1671,11 +1697,53 @@ function addTerminalLine(attack, banned) {
     terminal.appendChild(div);
   });
   
-  while (terminal.children.length > 80) {
+  while (terminal.children.length > 500) {
     terminal.removeChild(terminal.firstChild);
   }
   
-  terminal.scrollTop = terminal.scrollHeight;
+  if (terminalAutoScroll) {
+    terminal.scrollTop = terminal.scrollHeight;
+  }
+}
+
+let terminalAutoScroll = true;
+
+function toggleTerminalAutoScroll() {
+  terminalAutoScroll = !terminalAutoScroll;
+  const btn = document.getElementById('terminalScrollLockBtn');
+  if (btn) {
+    if (terminalAutoScroll) {
+      btn.textContent = 'AUTO-SCROLL: ON';
+      btn.className = 'text-[9px] text-[var(--success)] border border-[var(--success)] px-2 py-0.5 rounded mono hover:bg-[var(--success)] hover:text-black transition-colors';
+      const term = document.getElementById('terminal');
+      if (term) term.scrollTop = term.scrollHeight;
+    } else {
+      btn.textContent = 'AUTO-SCROLL: OFF (LOCKED)';
+      btn.className = 'text-[9px] text-[var(--warning)] border border-[var(--warning)] px-2 py-0.5 rounded mono hover:bg-[var(--warning)] hover:text-black transition-colors';
+    }
+  }
+}
+
+// Auto-detect user scroll interaction
+const terminalEl = document.getElementById('terminal');
+if (terminalEl) {
+  terminalEl.addEventListener('scroll', () => {
+    const atBottom = (terminalEl.scrollHeight - terminalEl.scrollTop - terminalEl.clientHeight) <= 40;
+    const btn = document.getElementById('terminalScrollLockBtn');
+    if (!atBottom && terminalAutoScroll) {
+      terminalAutoScroll = false;
+      if (btn) {
+        btn.textContent = 'AUTO-SCROLL: OFF (MANUAL)';
+        btn.className = 'text-[9px] text-[var(--warning)] border border-[var(--warning)] px-2 py-0.5 rounded mono hover:bg-[var(--warning)] hover:text-black transition-colors';
+      }
+    } else if (atBottom && !terminalAutoScroll) {
+      terminalAutoScroll = true;
+      if (btn) {
+        btn.textContent = 'AUTO-SCROLL: ON';
+        btn.className = 'text-[9px] text-[var(--success)] border border-[var(--success)] px-2 py-0.5 rounded mono hover:bg-[var(--success)] hover:text-black transition-colors';
+      }
+    }
+  });
 }
 
 function showAlertBanner(attack) {
