@@ -1952,17 +1952,18 @@ async function loadMalwarePayloads() {
         <div class="p-2 mb-1.5 border border-[var(--border)] bg-[#040810]/70 rounded flex flex-col md:flex-row md:items-center justify-between gap-2 hover:border-[var(--critical)] transition-colors">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-0.5">
-              <span class="text-[10px] text-[var(--critical)] font-bold">SHA256:</span>
-              <span class="text-[9px] text-[var(--text)] truncate max-w-[260px]" title="${escapeHtml(m.sha256)}">${escapeHtml(m.sha256.substring(0, 16))}...${escapeHtml(m.sha256.substring(48))}</span>
-              <span class="text-[8px] bg-[#1a2138] text-[var(--text-muted)] px-1.5 py-0.5 rounded">${escapeHtml(m.size_human)}</span>
+              <span class="text-[10px] text-red-300 font-bold mono bg-red-950/90 px-1.5 py-0.5 rounded border border-red-800/80">${escapeHtml(m.filename || 'dropped_file')}</span>
+              <span class="text-[9px] text-[var(--critical)] font-semibold">SHA256:</span>
+              <span class="text-[9px] text-[var(--text)] truncate max-w-[180px]" title="${escapeHtml(m.sha256)}">${escapeHtml(m.sha256.substring(0, 14))}...</span>
+              <span class="text-[8px] bg-[#1a2138] text-[var(--text-muted)] px-1.5 py-0.5 rounded mono">${escapeHtml(m.size_human)}</span>
             </div>
             <div class="text-[9px] text-[var(--text-muted)] flex items-center gap-3">
-              <span>IP: <strong class="text-[var(--text)]">${escapeHtml(m.src_ip)}</strong> (${escapeHtml(m.country_code)})</span>
+              <span>IP: <strong class="text-white">${escapeHtml(m.src_ip)}</strong> (${escapeHtml(m.country_code)} · ${escapeHtml(m.country)})</span>
               <span>MD5: ${escapeHtml(m.md5.substring(0, 8))}...</span>
               <span>Time: ${escapeHtml(m.timestamp)}</span>
             </div>
             <div class="text-[9px] text-[var(--text-dim)] truncate mt-0.5">
-              URL: ${escapeHtml(m.url)}
+              ${escapeHtml(m.url)}
             </div>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">

@@ -20,6 +20,7 @@ import json
 import os
 import re
 import secrets
+import subprocess
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -483,10 +484,79 @@ async def bans_active():
     return _read_fail2ban_bans()
 
 
+def _get_sandbox_dropped_files(events: list[dict], geo_cache: dict) -> list[dict]:
+    drops = []
+    try:
+        merged = subprocess.check_output(
+            ["docker", "inspect", "cowrie-sandbox", "--format", "{{.GraphDriver.Data.MergedDir}}"],
+            stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        if not merged:
+            return drops
+        
+        merged_path = Path(merged)
+        scan_dirs = [
+            (merged_path / "tmp", "/tmp"),
+            (merged_path / "var/tmp", "/var/tmp"),
+            (merged_path / "dev/shm", "/dev/shm")
+        ]
+        
+        # Recent sessions mapping: cmd substring -> session info
+        cmd_sessions = []
+        for ev in reversed(events[-600:]):
+            if ev.get("eventid") == "cowrie.command.input":
+                cmd_sessions.append((ev.get("input", ""), ev.get("src_ip", "Unknown"), ev.get("session", "")))
+
+        for host_dir, virtual_dir in scan_dirs:
+            if not host_dir.exists():
+                continue
+            for f in host_dir.iterdir():
+                if f.is_file() and not f.name.startswith("."):
+                    try:
+                        data = f.read_bytes()
+                        sha256 = hashlib.sha256(data).hexdigest()
+                        md5 = hashlib.md5(data).hexdigest()
+                        size = len(data)
+                        mtime = f.stat().st_mtime
+                        
+                        # Match author IP from command history
+                        matched_ip = "Unknown"
+                        for cmd, src_ip, sess in cmd_sessions:
+                            if f.name in cmd:
+                                matched_ip = src_ip
+                                break
+                        if matched_ip == "Unknown" and cmd_sessions:
+                            matched_ip = cmd_sessions[0][1]
+                        
+                        geo = geo_cache.get(matched_ip, {})
+                        drops.append({
+                            "filename": f.name,
+                            "sha256": sha256,
+                            "md5": md5,
+                            "size_bytes": size,
+                            "size_human": f"{size / 1024:.1f} KB" if size >= 1024 else f"{size} B",
+                            "mtime": mtime,
+                            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(mtime)),
+                            "src_ip": matched_ip,
+                            "country": geo.get("country", "Unknown"),
+                            "country_code": geo.get("country_code", "??"),
+                            "url": f"Sandbox drop: {virtual_dir}/{f.name}",
+                            "virustotal_url": f"https://www.virustotal.com/gui/file/{sha256}",
+                            "bazaar_url": f"https://bazaar.abuse.ch/sample/{sha256}/",
+                            "is_sandbox_drop": True
+                        })
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+    return drops
+
+
 @app.get("/api/malware")
 async def get_malware_payloads():
-    """List captured malware binaries dropped into Cowrie honeypot."""
+    """List captured malware binaries dropped into Cowrie honeypot & container sandbox."""
     downloads = []
+    seen_hashes = set()
     events_dl = {}
     for ev in state["events"]:
         if ev.get("eventid") in ("cowrie.session.file_download", "cowrie.session.file_upload"):
@@ -512,7 +582,9 @@ async def get_malware_payloads():
                 url = ev.get("url", "Direct SCP / Upload")
                 geo = state["geo_cache"].get(src_ip, {})
                 
+                seen_hashes.add(sha256)
                 downloads.append({
+                    "filename": f.name[:16] + "...",
                     "sha256": sha256,
                     "md5": md5,
                     "size_bytes": size,
@@ -524,8 +596,16 @@ async def get_malware_payloads():
                     "country_code": geo.get("country_code", "??"),
                     "url": url,
                     "virustotal_url": f"https://www.virustotal.com/gui/file/{sha256}",
-                    "bazaar_url": f"https://bazaar.abuse.ch/sample/{sha256}/"
+                    "bazaar_url": f"https://bazaar.abuse.ch/sample/{sha256}/",
+                    "is_sandbox_drop": False
                 })
+    
+    # Ingest sandbox dropped files
+    sandbox_drops = _get_sandbox_dropped_files(state["events"], state["geo_cache"])
+    for drop in sandbox_drops:
+        if drop["sha256"] not in seen_hashes:
+            seen_hashes.add(drop["sha256"])
+            downloads.append(drop)
     
     downloads.sort(key=lambda x: x["mtime"], reverse=True)
     return downloads
