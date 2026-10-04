@@ -149,11 +149,21 @@
   }
   #sessionTerminal::-webkit-scrollbar, #sessionCommandsList::-webkit-scrollbar, #sessionAnalyzerList::-webkit-scrollbar {
     width: 10px;
+    height: 10px;
+  }
+  #sessionTerminal::-webkit-scrollbar-track, #sessionCommandsList::-webkit-scrollbar-track, #sessionAnalyzerList::-webkit-scrollbar-track {
+    background: #060a17;
+    border-radius: 5px;
   }
   #sessionTerminal::-webkit-scrollbar-thumb, #sessionCommandsList::-webkit-scrollbar-thumb, #sessionAnalyzerList::-webkit-scrollbar-thumb {
     background: #ff6b35;
     border-radius: 5px;
     border: 1px solid #ff8c5a;
+    min-height: 30px;
+  }
+  #sessionTerminal::-webkit-scrollbar-thumb:hover, #sessionCommandsList::-webkit-scrollbar-thumb:hover, #sessionAnalyzerList::-webkit-scrollbar-thumb:hover {
+    background: #ff8c5a;
+    box-shadow: 0 0 10px #ff6b35;
   }
   
   #globe {
@@ -676,32 +686,32 @@
       </div>
       <span class="panel-id">[07.S]</span>
     </div>
-    <div class="grid grid-cols-[240px_1fr_260px] h-[420px] border-t border-[var(--border)] overflow-hidden">
+    <div class="grid grid-cols-[240px_1fr_260px] h-[420px] max-h-[420px] border-t border-[var(--border)] overflow-hidden">
       <!-- Session list -->
-      <div id="sessionAnalyzerList" class="overflow-y-scroll border-r border-[var(--border)] p-2 space-y-2 select-none" style="background: rgba(4, 8, 16, 0.4); max-height: 420px;">
+      <div id="sessionAnalyzerList" class="overflow-y-scroll border-r border-[var(--border)] p-2 space-y-2 select-none" style="background: rgba(4, 8, 16, 0.4); height: 420px; max-height: 420px; overflow-y: scroll !important;">
         <div class="text-[10px] text-[var(--text-dim)] mono p-2">SELECT A SESSION TO REPLAY...</div>
       </div>
       <!-- Virtual terminal playback -->
-      <div class="flex flex-col h-full bg-black relative">
-        <div class="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border)] bg-[#040810] shrink-0">
+      <div class="flex flex-col h-[420px] max-h-[420px] bg-black relative overflow-hidden">
+        <div class="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border)] bg-[#040810] shrink-0 h-[34px]">
           <span class="text-[10px] text-[var(--text-muted)] mono truncate max-w-[200px]" id="sessionTermHeader">TERMINAL // SESSION PLAYBACK</span>
           <div class="flex items-center gap-1.5">
-            <button id="sessionTermAutoScrollBtn" onclick="toggleSessionAutoScroll()" class="text-[9px] text-[var(--success)] border border-[var(--success)] px-1.5 py-0.5 rounded mono hover:bg-[var(--success)] hover:text-black transition-colors" title="Toggle automatic scrolling">AUTO-SCROLL: ON</button>
+            <button id="sessionTermAutoScrollBtn" onclick="toggleSessionAutoScroll()" class="text-[9px] text-[var(--success)] border border-[var(--success)] px-1.5 py-0.5 rounded mono hover:bg-[var(--success)] hover:text-black transition-colors font-bold" title="Toggle automatic scrolling">AUTO-SCROLL: ON</button>
             <button onclick="renderAllSessionEvents()" class="text-[9px] text-[var(--accent)] border border-[var(--accent)] px-1.5 py-0.5 rounded hover:bg-[var(--accent)] hover:text-black transition-colors mono" title="Dump entire session log instantly without waiting for animation">INSTANT LOG</button>
             <button id="sessionTermPlaySpeed" class="text-[9px] text-[var(--accent-2)] border border-[var(--accent-2)] px-1.5 py-0.5 rounded hover:bg-[var(--accent-2)] hover:text-black transition-colors mono">SPEED: 1x</button>
             <button id="sessionTermPauseBtn" onclick="toggleSessionPlaybackPause()" class="text-[9px] text-gray-300 border border-[var(--border)] px-1.5 py-0.5 rounded hover:bg-white hover:text-black transition-colors mono">PAUSE</button>
           </div>
         </div>
-        <div id="sessionTerminal" class="flex-1 p-3 overflow-y-scroll text-xs mono text-[var(--success)] whitespace-pre-wrap leading-relaxed select-text" style="min-height: 0; height: calc(100% - 32px); overscroll-behavior: contain; scroll-behavior: smooth;"></div>
+        <div id="sessionTerminal" tabindex="0" class="p-3 text-xs mono text-[var(--success)] whitespace-pre-wrap leading-relaxed select-text outline-none focus:ring-1 focus:ring-[var(--accent)]" style="height: 386px; max-height: 386px; overflow-y: scroll !important; overflow-x: hidden; -webkit-overflow-scrolling: touch;"></div>
         <button id="sessionTermJumpBtn" onclick="jumpSessionTermToBottom()" class="hidden absolute bottom-3 right-4 z-20 text-[9px] bg-cyan-950/90 text-cyan-300 border border-cyan-500 px-2.5 py-1 rounded shadow-lg mono hover:bg-cyan-900 transition-all cursor-pointer">↓ JUMP TO BOTTOM</button>
       </div>
       <!-- Captured commands list -->
-      <div id="sessionCommandsPanel" class="border-l border-[var(--border)] p-2 flex flex-col gap-1 select-none" style="background: rgba(4, 8, 16, 0.4); max-height: 420px;">
-        <div class="flex items-center justify-between text-[10px] text-[var(--text-dim)] mono p-1 border-b border-[var(--border)] mb-1 shrink-0">
+      <div id="sessionCommandsPanel" class="border-l border-[var(--border)] p-2 flex flex-col gap-1 select-none overflow-hidden" style="background: rgba(4, 8, 16, 0.4); height: 420px; max-height: 420px;">
+        <div class="flex items-center justify-between text-[10px] text-[var(--text-dim)] mono p-1 border-b border-[var(--border)] mb-1 shrink-0 h-[26px]">
           <span>COMMAND HISTORY</span>
           <span class="text-[8px] text-[var(--accent-2)] bg-[#101b33] px-1 rounded">SCROLLABLE</span>
         </div>
-        <div id="sessionCommandsList" class="flex-1 space-y-1.5 overflow-y-scroll pr-1 select-text" style="min-height: 0; height: calc(100% - 28px); overscroll-behavior: contain;">
+        <div id="sessionCommandsList" class="space-y-1.5 overflow-y-scroll pr-1 select-text" style="height: 380px; max-height: 380px; overflow-y: scroll !important;">
           <div class="text-[9px] text-[var(--text-muted)] mono italic p-1">No session selected.</div>
         </div>
       </div>
@@ -1594,8 +1604,6 @@ async function replaySession(sessionId) {
         return;
       }
       
-      const isAtBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) <= 60;
-      
       if (activePlaybackStep >= activePlaybackEvents.length) {
         if (activePlaybackIsLive) {
           // Connection is still open: poll for new events injected by SSE stream
@@ -1603,7 +1611,7 @@ async function replaySession(sessionId) {
           return;
         }
         term.insertAdjacentHTML('beforeend', `\n<span class="text-[var(--text-muted)]">[SYSTEM] End of session playback.</span>\n`);
-        if (isSessionAutoScroll && isAtBottom) term.scrollTop = term.scrollHeight;
+        if (isSessionAutoScroll) term.scrollTop = term.scrollHeight;
         return;
       }
       
@@ -1622,32 +1630,7 @@ async function replaySession(sessionId) {
         text = `[AUTH] SSH login attempt succeeded! Username: '${escapeHtml(ev.username)}' Password: '${escapeHtml(ev.password)}'\n`;
       } else if (ev.eventid === 'cowrie.command.input') {
         text = `\n<span class="text-[var(--text)] font-semibold">$ ${escapeHtml(ev.input)}</span>\n`;
-        
-        let output = '';
-        const cmd = ev.input.trim();
-        if (cmd.includes('speedtest')) {
-          output = '   Speedtest by Ookla 1.2.0.84\n   Server: Hostinger - Mumbai (id: 73567)\n   Latency: 0.38 ms (jitter: 0.03 ms)\n   Download: 997.91 Mbps (data used: 463.4 MB)\n   Upload:   834.32 Mbps (data used: 1.5 GB)\n   Packet Loss: 0.0%\n';
-        } else if (cmd.includes('btop') || cmd.includes('htop') || cmd.includes('top')) {
-          output = '[btop v1.3.2 running - interactive TUI dashboard active]\n[CPU: 12% | MEM: 31% | DISK: 40% | NET: 998 Mbps]\n';
-        } else if (cmd.includes('apt') || cmd.includes('dpkg')) {
-          output = 'Reading package lists... Done\nBuilding dependency tree... Done\nAll packages up to date.\n';
-        } else if (cmd.includes('uname')) {
-          output = 'Linux srv-prod-cluster01 6.14.0-37-generic #37-Ubuntu SMP PREEMPT_DYNAMIC x86_64 GNU/Linux\n';
-        } else if (cmd.includes('whoami')) {
-          output = 'root\n';
-        } else if (cmd.includes('id')) {
-          output = 'uid=0(root) gid=0(root) groups=0(root)\n';
-        } else if (cmd.includes('su') || cmd.includes('sudo')) {
-          output = 'root@srv-prod-cluster01:~#\n';
-        } else if (cmd.includes('.env')) {
-          output = 'APP_NAME=ProductionAPIGateway\nAPP_ENV=production\nDB_PASSWORD=SuperSecretP@ssw0rd2026!CANARY_TRIP\n';
-        } else if (cmd.includes('credentials') || cmd.includes('.aws')) {
-          output = '[default]\naws_access_key_id = AKIA4DEMOBAITKEY99214\n';
-        } else if (cmd === '^C') {
-          output = '^C\n';
-        } else {
-          output = '';
-        }
+        const output = getSimulatedCommandOutput(ev.input);
         if (output) {
           text += `<span class="text-[var(--text-muted)]">${output}</span>`;
         }
@@ -1659,7 +1642,7 @@ async function replaySession(sessionId) {
       if (text) {
         term.insertAdjacentHTML('beforeend', text);
       }
-      if (isSessionAutoScroll && isAtBottom) {
+      if (isSessionAutoScroll) {
         term.scrollTop = term.scrollHeight;
       }
       
@@ -1667,12 +1650,46 @@ async function replaySession(sessionId) {
       playbackInterval = setTimeout(nextStep, delay);
     }
     
+    isSessionAutoScroll = true;
+    updateSessionAutoScrollUI();
     nextStep();
     
   } catch (e) {
     console.error(e);
     term.innerHTML += `<span class="text-[var(--critical)]">[SYSTEM] Exception during playback loop.</span>\n`;
   }
+}
+
+function getSimulatedCommandOutput(input) {
+  const c = (input || '').trim();
+  if (c.includes('speedtest')) {
+    return '   Speedtest by Ookla 1.2.0.84\n   Server: Hostinger - Mumbai (id: 73567)\n   Latency: 0.38 ms (jitter: 0.03 ms)\n   Download: 997.91 Mbps (data used: 463.4 MB)\n   Upload:   834.32 Mbps (data used: 1.5 GB)\n   Packet Loss: 0.0%\n';
+  } else if (c.includes('btop') || c.includes('htop') || c.includes('top')) {
+    return '[btop v1.3.2 running - interactive TUI dashboard active]\n[CPU: 12% | MEM: 31% | DISK: 40% | NET: 998 Mbps]\n';
+  } else if (c.includes('docker')) {
+    return 'Client: Docker Engine - Community\n Version: 26.1.4\n API version: 1.45\n Go version: go1.21.11\n';
+  } else if (c.includes('cmatrix')) {
+    return '[cmatrix: matrix visualizer active]\n';
+  } else if (c.includes('apt') || c.includes('dpkg')) {
+    return 'Reading package lists... Done\nBuilding dependency tree... Done\nAll packages up to date.\n';
+  } else if (c.includes('uname')) {
+    return 'Linux srv-prod-cluster01 6.14.0-37-generic #37-Ubuntu SMP PREEMPT_DYNAMIC x86_64 GNU/Linux\n';
+  } else if (c.includes('whoami')) {
+    return 'root\n';
+  } else if (c.includes('id')) {
+    return 'uid=0(root) gid=0(root) groups=0(root)\n';
+  } else if (c.includes('su') || c.includes('sudo')) {
+    return 'root@srv-prod-cluster01:~#\n';
+  } else if (c.includes('.env')) {
+    return 'APP_NAME=ProductionAPIGateway\nAPP_ENV=production\nDB_PASSWORD=SuperSecretP@ssw0rd2026!CANARY_TRIP\n';
+  } else if (c.includes('credentials') || c.includes('.aws')) {
+    return '[default]\naws_access_key_id = AKIA4DEMOBAITKEY99214\n';
+  } else if (c === 'clear') {
+    return '';
+  } else if (c === '^C') {
+    return '^C\n';
+  }
+  return '';
 }
 
 let isPlaybackPaused = false;
@@ -1690,12 +1707,22 @@ function toggleSessionPlaybackPause() {
 let isSessionAutoScroll = true;
 function toggleSessionAutoScroll() {
   isSessionAutoScroll = !isSessionAutoScroll;
+  updateSessionAutoScrollUI();
+  if (isSessionAutoScroll) {
+    const term = document.getElementById('sessionTerminal');
+    if (term) term.scrollTop = term.scrollHeight;
+    const jumpBtn = document.getElementById('sessionTermJumpBtn');
+    if (jumpBtn) jumpBtn.classList.add('hidden');
+  }
+}
+
+function updateSessionAutoScrollUI() {
   const btn = document.getElementById('sessionTermAutoScrollBtn');
   if (btn) {
     btn.textContent = isSessionAutoScroll ? 'AUTO-SCROLL: ON' : 'AUTO-SCROLL: OFF (MANUAL)';
     btn.className = isSessionAutoScroll ?
-      'text-[9px] text-[var(--success)] border border-[var(--success)] px-1.5 py-0.5 rounded mono hover:bg-[var(--success)] hover:text-black transition-colors' :
-      'text-[9px] text-[var(--warning)] border border-[var(--warning)] px-1.5 py-0.5 rounded mono hover:bg-[var(--warning)] hover:text-black transition-colors';
+      'text-[9px] text-[var(--success)] border border-[var(--success)] px-1.5 py-0.5 rounded mono hover:bg-[var(--success)] hover:text-black transition-colors font-bold' :
+      'text-[9px] text-[var(--warning)] border border-[var(--warning)] px-1.5 py-0.5 rounded mono hover:bg-[var(--warning)] hover:text-black transition-colors font-bold';
   }
 }
 
@@ -1719,29 +1746,7 @@ function renderAllSessionEvents() {
       fullHtml += `[AUTH] SSH login attempt succeeded! Username: '${escapeHtml(ev.username)}' Password: '${escapeHtml(ev.password)}'\n`;
     } else if (ev.eventid === 'cowrie.command.input') {
       fullHtml += `\n<span class="text-[var(--text)] font-semibold">$ ${escapeHtml(ev.input)}</span>\n`;
-      let output = '';
-      const cmd = ev.input.trim();
-      if (cmd.includes('speedtest')) {
-        output = '   Speedtest by Ookla 1.2.0.84\n   Server: Hostinger - Mumbai (id: 73567)\n   Latency: 0.38 ms (jitter: 0.03 ms)\n   Download: 997.91 Mbps (data used: 463.4 MB)\n   Upload:   834.32 Mbps (data used: 1.5 GB)\n   Packet Loss: 0.0%\n';
-      } else if (cmd.includes('btop') || cmd.includes('htop') || cmd.includes('top')) {
-        output = '[btop v1.3.2 running - interactive TUI dashboard active]\n[CPU: 12% | MEM: 31% | DISK: 40% | NET: 998 Mbps]\n';
-      } else if (cmd.includes('apt') || cmd.includes('dpkg')) {
-        output = 'Reading package lists... Done\nBuilding dependency tree... Done\nAll packages up to date.\n';
-      } else if (cmd.includes('uname')) {
-        output = 'Linux srv-prod-cluster01 6.14.0-37-generic #37-Ubuntu SMP PREDYNAMIC x86_64 GNU/Linux\n';
-      } else if (cmd.includes('whoami')) {
-        output = 'root\n';
-      } else if (cmd.includes('id')) {
-        output = 'uid=0(root) gid=0(root) groups=0(root)\n';
-      } else if (cmd.includes('su') || cmd.includes('sudo')) {
-        output = 'root@srv-prod-cluster01:~#\n';
-      } else if (cmd.includes('.env')) {
-        output = 'APP_NAME=ProductionAPIGateway\nAPP_ENV=production\nDB_PASSWORD=SuperSecretP@ssw0rd2026!CANARY_TRIP\n';
-      } else if (cmd.includes('credentials') || cmd.includes('.aws')) {
-        output = '[default]\naws_access_key_id = AKIA4DEMOBAITKEY99214\n';
-      } else if (cmd === '^C') {
-        output = '^C\n';
-      }
+      const output = getSimulatedCommandOutput(ev.input);
       if (output) {
         fullHtml += `<span class="text-[var(--text-muted)]">${output}</span>`;
       }
@@ -1752,6 +1757,8 @@ function renderAllSessionEvents() {
   
   fullHtml += `\n<span class="text-[var(--text-muted)]">[SYSTEM] End of session log. (Freely scroll up and down)</span>\n`;
   term.innerHTML = fullHtml;
+  isSessionAutoScroll = false;
+  updateSessionAutoScrollUI();
   term.scrollTop = 0; // Start at beginning so user can scroll down naturally
   
   // Show jump button since we are at top
@@ -1764,24 +1771,46 @@ function jumpSessionTermToBottom() {
   if (term) {
     term.scrollTop = term.scrollHeight;
   }
+  isSessionAutoScroll = true;
+  updateSessionAutoScrollUI();
   const jumpBtn = document.getElementById('sessionTermJumpBtn');
   if (jumpBtn) jumpBtn.classList.add('hidden');
 }
 
-// Session terminal scroll tracker
+// Session terminal scroll & wheel tracker
 const sTermEl = document.getElementById('sessionTerminal');
 if (sTermEl) {
+  // If user scrolls wheel upwards while auto-scroll is on, switch to manual mode:
+  sTermEl.addEventListener('wheel', (e) => {
+    if (e.deltaY < 0) {
+      if (isSessionAutoScroll) {
+        isSessionAutoScroll = false;
+        updateSessionAutoScrollUI();
+      }
+      const jumpBtn = document.getElementById('sessionTermJumpBtn');
+      if (jumpBtn) jumpBtn.classList.remove('hidden');
+    } else if (e.deltaY > 0) {
+      const atBottom = (sTermEl.scrollHeight - sTermEl.scrollTop - sTermEl.clientHeight) <= 25;
+      if (atBottom) {
+        isSessionAutoScroll = true;
+        updateSessionAutoScrollUI();
+        const jumpBtn = document.getElementById('sessionTermJumpBtn');
+        if (jumpBtn) jumpBtn.classList.add('hidden');
+      }
+    }
+  }, { passive: true });
+
   sTermEl.addEventListener('scroll', () => {
-    const isAtBottom = (sTermEl.scrollHeight - sTermEl.scrollTop - sTermEl.clientHeight) <= 60;
+    const atBottom = (sTermEl.scrollHeight - sTermEl.scrollTop - sTermEl.clientHeight) <= 25;
     const jumpBtn = document.getElementById('sessionTermJumpBtn');
     if (jumpBtn) {
-      if (isAtBottom) {
+      if (atBottom) {
         jumpBtn.classList.add('hidden');
       } else {
         jumpBtn.classList.remove('hidden');
       }
     }
-  });
+  }, { passive: true });
 }
 
 // Live update left sidebar attack vectors dynamically
