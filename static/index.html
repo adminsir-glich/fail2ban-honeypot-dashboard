@@ -388,10 +388,26 @@
         <button id="pauseBtn" class="ctrl-btn">PAUSE</button>
         <button id="resetBtn" class="ctrl-btn">RESET</button>
         <button id="exportBtn" class="ctrl-btn">EXPORT</button>
+        <button id="audioRadarBtn" class="ctrl-btn text-[var(--accent-2)]">RADAR AUDIO: OFF</button>
       </div>
     </div>
   </div>
 </header>
+
+<!-- Honeytoken Canary Tripwire Alert Banner -->
+<div id="canaryAlertBanner" class="hidden px-4 py-2.5 mx-2.5 mt-2 bg-red-950/80 border border-red-500 rounded flex items-center justify-between animate-pulse select-none">
+  <div class="flex items-center gap-3">
+    <span class="text-xl">🚨</span>
+    <div>
+      <div class="text-xs font-bold text-red-400 mono tracking-wider">CRITICAL INTRUSION DETECTED // CANARY HONEYTOKEN TRIPPED</div>
+      <div class="text-[11px] text-gray-300 mono" id="canaryAlertText">Attacker accessed honeytoken bait!</div>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <span class="text-[9px] mono bg-red-800 text-white px-2 py-0.5 rounded">MITRE T1552</span>
+    <button onclick="document.getElementById('canaryAlertBanner').classList.add('hidden')" class="text-red-400 hover:text-white text-xs px-1">&times;</button>
+  </div>
+</div>
 
 <!-- Stats Bar -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 px-2.5 pt-2.5">
@@ -646,6 +662,45 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Advanced Threat Telemetry: Malware Vault & HASSH Cryptographic Fingerprints -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 px-2.5 mt-2.5">
+  
+  <!-- Malware Payload Vault -->
+  <div class="panel flex flex-col">
+    <div class="panel-header">
+      <div class="flex items-center gap-2">
+        <span class="panel-title">Malware Payload Vault · Dropped Exploits</span>
+        <span class="text-[9px] mono text-[var(--critical)] flex items-center gap-1">
+          <span class="status-dot pulse-dot" style="background: var(--critical); color: var(--critical); width:5px; height:5px;"></span>
+          <span id="malwareCount">0 FILES</span>
+        </span>
+      </div>
+      <span class="panel-id">[10.M]</span>
+    </div>
+    <div class="p-2 overflow-y-auto flex-1 text-xs mono" style="max-height: 280px;" id="malwareVaultList">
+      <div class="text-[10px] text-[var(--text-muted)] italic p-2">No malware drops recorded yet. Emulated sandbox armed.</div>
+    </div>
+  </div>
+
+  <!-- HASSH Cryptographic Fingerprints -->
+  <div class="panel flex flex-col">
+    <div class="panel-header">
+      <div class="flex items-center gap-2">
+        <span class="panel-title">SSH Client Fingerprints (HASSH)</span>
+        <span class="text-[9px] mono text-[var(--accent-2)] flex items-center gap-1">
+          <span class="status-dot pulse-dot" style="background: var(--accent-2); color: var(--accent-2); width:5px; height:5px;"></span>
+          TOOL PROFILING
+        </span>
+      </div>
+      <span class="panel-id">[11.H]</span>
+    </div>
+    <div class="p-2 overflow-y-auto flex-1 text-xs mono" style="max-height: 280px;" id="hasshFingerprintList">
+      <div class="text-[10px] text-[var(--text-muted)] italic p-2">Monitoring SSH key exchange handshakes...</div>
+    </div>
+  </div>
+
 </div>
 
 <footer class="px-5 py-4 text-center text-[10px] text-[var(--text-dim)] mono tracking-[0.2em] border-t border-[var(--border)] mt-2">
@@ -1403,9 +1458,22 @@ function updateCommandsPanel() {
     cmdListEl.innerHTML = '<div class="text-[9px] text-[var(--text-muted)] mono italic p-1">No commands executed.</div>';
   } else {
     cmdListEl.innerHTML = commands.map(c => {
+      const mitre = c.mitre || { mitre_id: 'T1059.004', mitre_name: 'Unix Shell', tactic: 'Execution', severity: 'LOW', is_canary: false };
+      let badgeStyle = 'background: rgba(0, 240, 255, 0.15); color: var(--accent-2); border: 1px solid rgba(0, 240, 255, 0.4);';
+      if (mitre.is_canary) {
+        badgeStyle = 'background: rgba(255, 46, 99, 0.3); color: var(--critical); border: 1px solid var(--critical); font-weight: bold;';
+      } else if (mitre.severity === 'HIGH' || mitre.severity === 'CRITICAL') {
+        badgeStyle = 'background: rgba(255, 107, 53, 0.2); color: var(--accent); border: 1px solid rgba(255, 107, 53, 0.5);';
+      }
       return `
-        <div class="p-1 border border-[var(--border)] bg-[#040810]/40 rounded mono text-[9px] text-[var(--text)] hover:border-[var(--accent-2)] transition-colors select-text cursor-pointer truncate" title="${escapeHtml(c.input)}">
-          <span class="text-[var(--accent)] font-semibold">$</span> ${escapeHtml(c.input)}
+        <div class="p-1.5 border border-[var(--border)] bg-[#040810]/60 rounded mono text-[9px] hover:border-[var(--accent-2)] transition-colors select-text">
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="px-1 py-0.5 rounded text-[8px] mono" style="${badgeStyle}" title="${escapeHtml(mitre.mitre_name)}">${escapeHtml(mitre.mitre_id)} · ${escapeHtml(mitre.tactic || 'Execution')}</span>
+            ${mitre.is_canary ? '<span class="text-[8px] text-[var(--critical)] font-bold animate-pulse">CANARY</span>' : ''}
+          </div>
+          <div class="text-[var(--text)] truncate cursor-pointer" title="${escapeHtml(c.input)}">
+            <span class="text-[var(--accent)] font-semibold">$</span> ${escapeHtml(c.input)}
+          </div>
         </div>
       `;
     }).join('');
@@ -1662,6 +1730,31 @@ function subscribeSSE() {
         }
       }
       
+      // Check for Canary Tripwire Alerts on command executions
+      if (ev.eventid === 'cowrie.command.input') {
+        const mitre = ev.mitre;
+        if (mitre && mitre.is_canary) {
+          playAttackSound('CRITICAL');
+          const banner = document.getElementById('canaryAlertBanner');
+          const alertText = document.getElementById('canaryAlertText');
+          if (banner && alertText) {
+            alertText.textContent = `Attacker [${escapeHtml(ev.src_ip || '?')}]: Executed '${escapeHtml(ev.input || '')}' -> ${escapeHtml(mitre.canary_name || 'Canary Breached!')}`;
+            banner.classList.remove('hidden');
+          }
+        }
+      }
+
+      // Check for file download (malware payload drop)
+      if (ev.eventid === 'cowrie.session.file_download' || ev.eventid === 'cowrie.session.file_upload') {
+        playAttackSound('CRITICAL');
+        loadMalwarePayloads();
+      }
+
+      // Check for new key exchange (HASSH fingerprinting)
+      if (ev.eventid === 'cowrie.client.kex') {
+        loadHasshFingerprints();
+      }
+
       if (ev.eventid === 'cowrie.login.failed' || ev.eventid === 'cowrie.login.success') {
         const isSuccess = ev.eventid === 'cowrie.login.success';
         const severity = isSuccess ? 'SUCCESS' : (ev.username === 'root' || ev.username === 'admin') ? 'HIGH' : 'MEDIUM';
@@ -1800,6 +1893,113 @@ document.getElementById('sessionTermPlaySpeed').addEventListener('click', (e) =>
   e.target.textContent = `SPEED: ${currentSpeed}x`;
 });
 
+// Audio Radar toggle listener
+const audioRadarBtn = document.getElementById('audioRadarBtn');
+if (audioRadarBtn) {
+  audioRadarBtn.addEventListener('click', (e) => {
+    state.paused = false;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch(err) {}
+    const btn = e.target;
+    if (btn.textContent.includes('OFF')) {
+      btn.textContent = 'RADAR AUDIO: ON';
+      btn.classList.add('text-[var(--success)]', 'border-[var(--success)]');
+      playAttackSound('LOW');
+    } else {
+      btn.textContent = 'RADAR AUDIO: OFF';
+      btn.classList.remove('text-[var(--success)]', 'border-[var(--success)]');
+    }
+  });
+}
+
+// Load Malware Payloads from Honeypot Sandbox
+async function loadMalwarePayloads() {
+  try {
+    const res = await fetch('/fail2ban/api/malware');
+    const list = await res.json();
+    const countEl = document.getElementById('malwareCount');
+    const listEl = document.getElementById('malwareVaultList');
+    if (countEl) countEl.textContent = `${list.length} FILES`;
+    if (!listEl) return;
+    
+    if (list.length === 0) {
+      listEl.innerHTML = '<div class="text-[10px] text-[var(--text-muted)] italic p-2">No malware drops recorded yet. Emulated sandbox armed.</div>';
+      return;
+    }
+    
+    listEl.innerHTML = list.map(m => {
+      return `
+        <div class="p-2 mb-1.5 border border-[var(--border)] bg-[#040810]/70 rounded flex flex-col md:flex-row md:items-center justify-between gap-2 hover:border-[var(--critical)] transition-colors">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-[10px] text-[var(--critical)] font-bold">SHA256:</span>
+              <span class="text-[9px] text-[var(--text)] truncate max-w-[260px]" title="${escapeHtml(m.sha256)}">${escapeHtml(m.sha256.substring(0, 16))}...${escapeHtml(m.sha256.substring(48))}</span>
+              <span class="text-[8px] bg-[#1a2138] text-[var(--text-muted)] px-1.5 py-0.5 rounded">${escapeHtml(m.size_human)}</span>
+            </div>
+            <div class="text-[9px] text-[var(--text-muted)] flex items-center gap-3">
+              <span>IP: <strong class="text-[var(--text)]">${escapeHtml(m.src_ip)}</strong> (${escapeHtml(m.country_code)})</span>
+              <span>MD5: ${escapeHtml(m.md5.substring(0, 8))}...</span>
+              <span>Time: ${escapeHtml(m.timestamp)}</span>
+            </div>
+            <div class="text-[9px] text-[var(--text-dim)] truncate mt-0.5">
+              URL: ${escapeHtml(m.url)}
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <a href="${escapeHtml(m.virustotal_url)}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 bg-red-950/60 hover:bg-red-900 border border-red-700/60 text-red-300 rounded text-[9px] mono transition-colors">
+              VT SCAN
+            </a>
+            <a href="${escapeHtml(m.bazaar_url)}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 bg-blue-950/60 hover:bg-blue-900 border border-blue-700/60 text-blue-300 rounded text-[9px] mono transition-colors">
+              BAZAAR
+            </a>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.warn("Failed loading malware payloads:", e);
+  }
+}
+
+// Load SSH Client Fingerprints (HASSH)
+async function loadHasshFingerprints() {
+  try {
+    const res = await fetch('/fail2ban/api/fingerprints/hassh');
+    const list = await res.json();
+    const listEl = document.getElementById('hasshFingerprintList');
+    if (!listEl) return;
+    
+    if (list.length === 0) {
+      listEl.innerHTML = '<div class="text-[10px] text-[var(--text-muted)] italic p-2">Monitoring SSH key exchange handshakes...</div>';
+      return;
+    }
+    
+    listEl.innerHTML = list.map(h => {
+      return `
+        <div class="p-2 mb-1.5 border border-[var(--border)] bg-[#040810]/70 rounded flex items-center justify-between gap-2 hover:border-[var(--accent-2)] transition-colors">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-[10px] text-[var(--accent-2)] font-semibold">${escapeHtml(h.tool)}</span>
+              <span class="text-[8px] bg-[var(--border)] text-[var(--text-dim)] px-1 rounded">${h.unique_ips} IPs</span>
+            </div>
+            <div class="text-[9px] text-[var(--text-muted)] truncate" title="${escapeHtml(h.hassh)}">
+              HASSH: ${escapeHtml(h.hassh)}
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <span class="text-xs font-bold text-[var(--accent)]">${h.count}</span>
+            <div class="text-[8px] text-[var(--text-dim)]">HITS</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.warn("Failed loading HASSH fingerprints:", e);
+  }
+}
+
 // Resize using ResizeObserver (solves flexbox race conditions on load)
 const resizeObserver = new ResizeObserver((entries) => {
   for (let entry of entries) {
@@ -1823,6 +2023,8 @@ async function boot() {
   await loadTimeseries();
   await loadSystemMetrics();
   await loadHistoricalGeo();
+  await loadMalwarePayloads();
+  await loadHasshFingerprints();
   
   document.getElementById('terminal').innerHTML += '<div class="terminal-line"><span class="text-[var(--success)]">[SYSTEM] Connection established. SSE stream listening...</span></div>';
   
@@ -1832,6 +2034,8 @@ async function boot() {
   setInterval(loadSystemMetrics, 3000); // 3s
   setInterval(loadBans, 15000);        // 15s
   setInterval(loadTimeseries, 60000);  // 1m
+  setInterval(loadMalwarePayloads, 10000); // 10s
+  setInterval(loadHasshFingerprints, 20000); // 20s
 }
 
 boot();

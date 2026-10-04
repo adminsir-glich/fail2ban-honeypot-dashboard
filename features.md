@@ -68,15 +68,32 @@ graph TD
 * **Mechanism:** Replaced the default OS watchdog observer (which relies on `inotify`) with an asyncio sleep loop checking file sizes and reading new offsets.
 * **Benefit:** 100% reliable across virtualized filesystems, containerized environments, and cloud OCI environments where standard watchdog filesystem triggers often fail or lag.
 
+### 7. Malware Payload Vault & Forensic Detonation
+* **Description:** Real-time capture and forensic analysis of dropped binaries, worms, and botnet scripts.
+* **Mechanism:** Intercepts `cowrie.session.file_download` and `file_upload` events, isolates dropped files in `/opt/cowrie/var/lib/cowrie/downloads/`, computes instantaneous SHA256 and MD5 hashes, and serves via `/api/malware` with 1-click links to VirusTotal and MalwareBazaar.
+* **Benefit:** Provides instant malware telemetry, identifying whether incoming attacks are delivering Mirai variants, cryptominers, or custom rootkits.
+
+### 8. MITRE ATT&CK Automated Tagger & Canary Honeytokens
+* **Description:** Automatically classifies attacker commands using the MITRE ATT&CK framework and trips instant critical alarms if decoy honeytokens are touched.
+* **Mechanism:** Implemented in `threat_intel.py`. Scans command streams for T1082 (System Discovery), T1016 (Network Discovery), T1105 (Ingress Tool Transfer), T1003 (Credential Dumping), and T1070 (Defense Evasion). Monitored honeytokens include fake `.aws/credentials`, `/var/www/html/.env`, `.ssh/id_rsa`, and shell history.
+* **Benefit:** Instant visual understanding of adversary tactics, techniques, and procedures (TTPs), with flashing alarms on decoy compromise.
+
+### 9. SSH Cryptographic HASSH Fingerprinting
+* **Description:** Identifies threat actors and botnets across rotating IP addresses using SSH cryptographic handshake signatures.
+* **Mechanism:** Parses Cowrie `cowrie.client.kex` events to calculate the client `hassh` fingerprint (MD5 hash of key exchange, cipher, MAC, and compression lists) and maps it against known tool signatures (e.g. Paramiko, Masscan, PuTTY, ZGrab, OpenSSH).
+* **Benefit:** Spots distributed botnets coordinating attacks across multiple residential/cloud IPs using the same underlying exploit tool.
+
+### 10. Native System Telemetry & Audio Radar Synthesizer
+* **Description:** Real-time CPU, RAM, Disk, Active Sockets, and Network TX/RX speed metrics via native `psutil`, paired with a Web Audio API synthesized threat radar.
+* **Mechanism:** Direct kernel query bypassing legacy external collectors; Web Audio API generates subtle sonar pings for scans and dual-tone warble alarms for root intrusions and honeytoken breaches.
+
 ---
 
 ## 🔮 Planned Future Improvements
 
-Here is what can be added or improved in future iterations of the dashboard:
-
 | Feature | Difficulty | Planned Mechanism | Expected Benefit |
 | :--- | :--- | :--- | :--- |
-| **Malicious Payload Sandbox Logger** | Medium | Log curl/wget URLs executed by the attacker and download files into a secure VM sandbox for automated MD5/SHA256 scanning. | Real-time malware intelligence. |
-| **Elasticsearch/Database Persistence** | High | Migrate from in-memory array logs (`state["events"]`) to a persistent database (SQLite or PostgreSQL) to preserve months of log history. | Long-term threat analysis and historical querying. |
-| **Interactive Terminal Input** | Hard | Allow the admin to "hijack" the terminal replay and interactively inject commands/fake outputs back to the attacker's shell. | Active defense and honeypot interaction. |
-| **Attacker Fingerprinting (Hassh/SSH Client ID)** | Easy | Cache and display Hassh client key exchanges to identify attackers who rotate their IP addresses but use the same tool. | Advanced bot identification. |
+| **Elasticsearch/SQLite Persistence** | Medium | Migrate from in-memory array logs (`state["events"]`) to SQLite/PostgreSQL for long-term historical trends. | Months of historical querying. |
+| **Interactive Terminal Takeover** | Hard | Allow the administrator to interactively inject shell commands back into live attacker sessions. | Active adversary engagement. |
+| **LLM Dynamic Shell Backend** | Medium | Connect Cowrie to an LLM provider to dynamically generate realistic shell outputs for arbitrary unrecognized commands. | Endless deceptive depth. |
+
