@@ -664,14 +664,14 @@
   </div>
 </div>
 
-<!-- Advanced Threat Telemetry: Malware Vault & HASSH Cryptographic Fingerprints -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 px-2.5 mt-2.5">
+<!-- Advanced Threat Telemetry: Malware Vault, HASSH Cryptographic Fingerprints & Canary Breaches -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-2.5 px-2.5 mt-2.5">
   
   <!-- Malware Payload Vault -->
   <div class="panel flex flex-col">
     <div class="panel-header">
       <div class="flex items-center gap-2">
-        <span class="panel-title">Malware Payload Vault · Dropped Exploits</span>
+        <span class="panel-title">Malware Vault · Payloads</span>
         <span class="text-[9px] mono text-[var(--critical)] flex items-center gap-1">
           <span class="status-dot pulse-dot" style="background: var(--critical); color: var(--critical); width:5px; height:5px;"></span>
           <span id="malwareCount">0 FILES</span>
@@ -688,7 +688,7 @@
   <div class="panel flex flex-col">
     <div class="panel-header">
       <div class="flex items-center gap-2">
-        <span class="panel-title">SSH Client Fingerprints (HASSH)</span>
+        <span class="panel-title">SSH Fingerprints (HASSH)</span>
         <span class="text-[9px] mono text-[var(--accent-2)] flex items-center gap-1">
           <span class="status-dot pulse-dot" style="background: var(--accent-2); color: var(--accent-2); width:5px; height:5px;"></span>
           TOOL PROFILING
@@ -698,6 +698,23 @@
     </div>
     <div class="p-2 overflow-y-auto flex-1 text-xs mono" style="max-height: 280px;" id="hasshFingerprintList">
       <div class="text-[10px] text-[var(--text-muted)] italic p-2">Monitoring SSH key exchange handshakes...</div>
+    </div>
+  </div>
+
+  <!-- Honeytoken Canary Breaches -->
+  <div class="panel flex flex-col">
+    <div class="panel-header">
+      <div class="flex items-center gap-2">
+        <span class="panel-title">Canary Tripwire Breaches</span>
+        <span class="text-[9px] mono text-red-400 flex items-center gap-1">
+          <span class="status-dot pulse-dot" style="background: #ef4444; color: #ef4444; width:5px; height:5px;"></span>
+          <span id="canaryCount">0 TRIPPED</span>
+        </span>
+      </div>
+      <span class="panel-id">[12.C]</span>
+    </div>
+    <div class="p-2 overflow-y-auto flex-1 text-xs mono" style="max-height: 280px;" id="canaryBreachList">
+      <div class="text-[10px] text-[var(--text-muted)] italic p-2">Canary honeytokens (.env, AWS, shadow) armed and untouched.</div>
     </div>
   </div>
 
@@ -1741,6 +1758,7 @@ function subscribeSSE() {
             alertText.textContent = `Attacker [${escapeHtml(ev.src_ip || '?')}]: Executed '${escapeHtml(ev.input || '')}' -> ${escapeHtml(mitre.canary_name || 'Canary Breached!')}`;
             banner.classList.remove('hidden');
           }
+          loadHoneytokens();
         }
       }
 
@@ -2000,6 +2018,43 @@ async function loadHasshFingerprints() {
   }
 }
 
+// Load Canary Honeytoken Breaches
+async function loadHoneytokens() {
+  try {
+    const res = await fetch('/fail2ban/api/alerts/honeytokens');
+    const list = await res.json();
+    const countEl = document.getElementById('canaryCount');
+    const listEl = document.getElementById('canaryBreachList');
+    if (countEl) countEl.textContent = `${list.length} TRIPPED`;
+    if (!listEl) return;
+    
+    if (list.length === 0) {
+      listEl.innerHTML = '<div class="text-[10px] text-[var(--text-muted)] italic p-2">Canary honeytokens (.env, AWS, shadow) armed and untouched.</div>';
+      return;
+    }
+    
+    listEl.innerHTML = list.map(c => {
+      return `
+        <div class="p-2 mb-1.5 border border-red-900/60 bg-[#160505]/70 rounded flex flex-col justify-between gap-1 hover:border-red-500 transition-colors">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[10px] text-red-400 font-bold uppercase truncate">${escapeHtml(c.canary_name)}</span>
+            <span class="text-[8px] bg-red-950 text-red-300 px-1.5 py-0.5 rounded border border-red-800 mono">${escapeHtml(c.severity || 'CRITICAL')}</span>
+          </div>
+          <div class="text-[9px] text-gray-300 mono truncate bg-black/40 px-1.5 py-1 rounded">
+            $ ${escapeHtml(c.command)}
+          </div>
+          <div class="text-[8px] text-[var(--text-dim)] flex items-center justify-between">
+            <span>IP: <strong class="text-white">${escapeHtml(c.src_ip)}</strong> (${escapeHtml(c.country || 'Unknown')})</span>
+            <span>${escapeHtml(c.timestamp ? c.timestamp.substring(11, 19) : '')}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.warn("Failed loading honeytoken alerts:", e);
+  }
+}
+
 // Resize using ResizeObserver (solves flexbox race conditions on load)
 const resizeObserver = new ResizeObserver((entries) => {
   for (let entry of entries) {
@@ -2025,6 +2080,7 @@ async function boot() {
   await loadHistoricalGeo();
   await loadMalwarePayloads();
   await loadHasshFingerprints();
+  await loadHoneytokens();
   
   document.getElementById('terminal').innerHTML += '<div class="terminal-line"><span class="text-[var(--success)]">[SYSTEM] Connection established. SSE stream listening...</span></div>';
   
@@ -2036,6 +2092,7 @@ async function boot() {
   setInterval(loadTimeseries, 60000);  // 1m
   setInterval(loadMalwarePayloads, 10000); // 10s
   setInterval(loadHasshFingerprints, 20000); // 20s
+  setInterval(loadHoneytokens, 10000); // 10s
 }
 
 boot();
